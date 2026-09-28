@@ -1,0 +1,20 @@
+output_dir: results/compressed
+
+# CoViAR setting: short GOP, P-frames only, single reference frame
+reencode:
+  enabled: true
+  gop: 12
+  bframes: 0
+  refs: 1
+  crf: 23
+
+save:
+  frames: true      # every decoded frame, type in the file name (000012_I.jpg)
+  residuals: true   # residual visualization (PNG)
+  mv: true          # motion vector arrows on the decoded frame
+  raw: false        # residual (int16) + motion vectors per frame, .npz, heavy
+  videos: true      # decoded.mp4, residual.mp4, mv.mp4
+
+jpeg_quality: 95
+residual_gain: 4    # visualization only: 128 + gain * residual
+mv_min_magnitude: 1.0

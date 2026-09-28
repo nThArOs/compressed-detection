@@ -1,0 +1,9 @@
+services:
+  extract:
+    build: .
+    image: compressed-detection:cpu
+    volumes:
+      - ./data:/app/data
+      - ./results:/app/results
+      - ./configs:/app/configs
+      - ./scripts:/app/scripts

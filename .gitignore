@@ -1,0 +1,15 @@
+data/*
+!data/.gitkeep
+results/*
+!results/.gitkeep
+*.mp4
+
+__pycache__/
+*.pyc
+.venv/
+venv/
+.vscode/
+.idea/
+
+CLAUDE.md
+.claude/

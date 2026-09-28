@@ -2,6 +2,9 @@ data/*
 !data/.gitkeep
 results/*
 !results/.gitkeep
+models/*
+!models/.gitkeep
+*.pt
 *.mp4
 
 __pycache__/

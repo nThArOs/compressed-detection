@@ -1,0 +1,26 @@
+output_dir: results/tracking
+
+baseline:
+  tracker: bytetrack.yaml   # Ultralytics default: high 0.25, low 0.1, buffer 30
+  conf: 0.1                 # must be <= the tracker low threshold
+  imgsz: 640
+
+eval:
+  ignore_ioa: 0.5           # tracker boxes this much inside an ignore region are dropped
+
+datasets:
+  dut_anti_uav:
+    splits: [test]
+    model: models/drone_yolo11n.pt
+    class_map: {0: drone}
+    eval_classes: [drone]
+  uavdt:
+    splits: [test]
+    model: models/yolo11n.pt  # COCO
+    class_map: {2: car, 5: bus, 7: truck}
+    eval_classes: [car, truck, bus]
+  visdrone_mot:
+    splits: [test_dev]
+    model: models/yolo11n.pt  # COCO, no van class
+    class_map: {0: pedestrian, 1: bicycle, 2: car, 3: motor, 5: bus, 7: truck}
+    eval_classes: [pedestrian, car, van, truck, bus]   # official VisDrone MOT classes

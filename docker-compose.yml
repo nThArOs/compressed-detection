@@ -7,3 +7,16 @@ services:
       - ./results:/app/results
       - ./configs:/app/configs
       - ./scripts:/app/scripts
+
+  track:
+    build:
+      context: .
+      dockerfile: Dockerfile.track
+    image: compressed-detection-track:cpu
+    volumes:
+      - ./data:/app/data
+      - ./results:/app/results
+      - ./configs:/app/configs
+      - ./scripts:/app/scripts
+      - ./models:/app/models
+    shm_size: "2gb"

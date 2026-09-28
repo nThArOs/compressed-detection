@@ -1,0 +1,21 @@
+FROM python:3.11-slim
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg libgl1 libglib2.0-0 \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+COPY requirements.txt requirements-track.txt ./
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements-track.txt
+
+COPY configs/ configs/
+COPY scripts/ scripts/
+
+ENV PYTHONUNBUFFERED=1 \
+    YOLO_CONFIG_DIR=/tmp/ultralytics
+
+ENTRYPOINT ["python"]

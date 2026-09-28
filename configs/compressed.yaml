@@ -12,9 +12,15 @@ save:
   frames: true      # every decoded frame, type in the file name (000012_I.jpg)
   residuals: true   # residual visualization (PNG)
   mv: true          # motion vector arrows on the decoded frame
+  flow: true        # motion field as color: hue = direction, brightness = magnitude
   raw: false        # residual (int16) + motion vectors per frame, .npz, heavy
-  videos: true      # decoded.mp4, residual.mp4, mv.mp4
+  videos: true      # decoded.mp4, residual.mp4, mv.mp4, flow.mp4
 
 jpeg_quality: 95
 residual_gain: 4    # visualization only: 128 + gain * residual
 mv_min_magnitude: 1.0
+flow_max_magnitude: 4.0   # pixels, full brightness in the flow image
+
+mosaic:
+  rows: 4           # P-frames, evenly spaced over the video
+  tile_width: 480

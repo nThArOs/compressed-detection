@@ -70,6 +70,16 @@ def residual(cur, ref, flow, grid):
     return cur.astype(np.int16) - pred.astype(np.int16)
 
 
+def flow_image(flow, max_mag):
+    # hue = direction, brightness = magnitude, black = static
+    mag, ang = cv2.cartToPolar(flow[..., 0], flow[..., 1], angleInDegrees=True)
+    hsv = np.zeros((*flow.shape[:2], 3), np.uint8)
+    hsv[..., 0] = (ang / 2).astype(np.uint8)
+    hsv[..., 1] = 255
+    hsv[..., 2] = np.clip(mag * 255 / max_mag, 0, 255).astype(np.uint8)
+    return cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+
+
 def draw_vectors(img, mvs, min_mag):
     out = img.copy()
     mag = np.hypot(mvs["motion_x"], mvs["motion_y"]) / mvs["motion_scale"]
@@ -87,7 +97,7 @@ def process(path, cfg, out_dir):
         reencode(path, src, cfg["reencode"])
 
     save = cfg["save"]
-    for key in ("frames", "residuals", "mv", "raw"):
+    for key in ("frames", "residuals", "mv", "flow", "raw"):
         if save[key]:
             (out_dir / key).mkdir(exist_ok=True)
     jpg = [cv2.IMWRITE_JPEG_QUALITY, cfg["jpeg_quality"]]
@@ -102,7 +112,7 @@ def process(path, cfg, out_dir):
     writers = {}
     if save["videos"]:
         writers = {k: VideoWriter(out_dir / f"{k}.mp4", fps, w, h)
-                   for k in ("decoded", "residual", "mv")}
+                   for k in ("decoded", "residual", "mv", "flow")}
 
     rows, types, maes = [], {}, []
     prev = None
@@ -114,9 +124,12 @@ def process(path, cfg, out_dir):
         mvs = past_vectors(frame) if prev is not None else None
 
         res = mv_img = None
+        flow_img = np.zeros_like(img)
         if mvs is not None and len(mvs):
-            res = residual(img, prev, motion_field(mvs, h, w), grid)
+            flow = motion_field(mvs, h, w)
+            res = residual(img, prev, flow, grid)
             mv_img = draw_vectors(img, mvs, cfg["mv_min_magnitude"])
+            flow_img = flow_image(flow, cfg["flow_max_magnitude"])
             maes.append(float(np.abs(res).mean()))
         res_img = (np.full_like(img, 128) if res is None
                    else np.clip(128 + gain * res, 0, 255).astype(np.uint8))
@@ -128,12 +141,15 @@ def process(path, cfg, out_dir):
             cv2.imwrite(str(out_dir / "residuals" / f"{stem}.png"), res_img)
         if mv_img is not None and save["mv"]:
             cv2.imwrite(str(out_dir / "mv" / f"{stem}.jpg"), mv_img, jpg)
+        if res is not None and save["flow"]:
+            cv2.imwrite(str(out_dir / "flow" / f"{stem}.png"), flow_img)
         if res is not None and save["raw"]:
             np.savez_compressed(out_dir / "raw" / f"{stem}.npz", residual=res, mvs=mvs)
         if writers:
             writers["decoded"].write(img)
             writers["residual"].write(res_img)
             writers["mv"].write(img if mv_img is None else mv_img)
+            writers["flow"].write(flow_img)
 
         rows.append({"frame": i, "time": round(float(frame.time or 0), 3), "type": ptype,
                      "mvs": 0 if mvs is None else len(mvs),

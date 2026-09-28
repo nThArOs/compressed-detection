@@ -1,0 +1,35 @@
+# Conversion of the raw datasets to MOTChallenge format, one folder per sequence:
+# data/mot/<dataset>/<split>/<sequence>/{video.mp4, gt.txt, seqinfo.ini}
+output_dir: data/mot
+
+# Common class ids across datasets (gt.txt column 8). Ignore regions get conf 0 and class -1.
+classes: [drone, pedestrian, people, bicycle, car, van, truck, tricycle, awning-tricycle, bus,
+          motor, others]
+
+# Videos are encoded with the `reencode` settings of configs/compressed.yaml.
+datasets:
+  visdrone_mot:
+    fps: 30
+    frame_pattern: "%07d.jpg"
+    splits:
+      train: data/visdrone_mot/train/VisDrone2019-MOT-train
+      val: data/visdrone_mot/val/VisDrone2019-MOT-val
+      test_dev: data/visdrone_mot/test_dev/VisDrone2019-MOT-test-dev
+    categories: {1: pedestrian, 2: people, 3: bicycle, 4: car, 5: van, 6: truck, 7: tricycle,
+                 8: awning-tricycle, 9: bus, 10: motor, 11: others}
+
+  uavdt:
+    fps: 30
+    frame_pattern: "img%06d.jpg"
+    images: data/uavdt/benchmark_m/UAV-benchmark-M
+    gt: data/uavdt/toolkit/UAV-benchmark-MOTD_v1.0/GT
+    # test split used in most UAVDT MOT papers, the rest is train
+    test: [M0203, M0205, M0208, M0209, M0403, M0601, M0602, M0606, M0701, M0801, M0802, M1001,
+           M1004, M1007, M1009, M1101, M1301, M1302, M1303, M1401]
+    categories: {1: car, 2: truck, 3: bus}
+
+  dut_anti_uav:
+    fps: 30           # not given by the authors
+    frame_pattern: "%05d.jpg"
+    images: data/dut_anti_uav/track_images/Anti-UAV-Tracking-V0
+    gt: data/dut_anti_uav/track_gt/Anti-UAV-Tracking-V0GT

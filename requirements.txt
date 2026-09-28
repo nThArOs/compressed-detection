@@ -2,3 +2,4 @@ av
 numpy
 opencv-python-headless
 pyyaml
+gdown

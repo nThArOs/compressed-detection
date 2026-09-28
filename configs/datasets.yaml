@@ -1,0 +1,29 @@
+# One folder per dataset under data/, so results can be reported per dataset.
+# Google Drive ids from the official pages. If Drive refuses (quota), download the file in a
+# browser and drop it into data/<dataset>/archives/ under the name given in `archive`.
+
+visdrone_mot:
+  url: https://github.com/VisDrone/VisDrone-Dataset
+  license: research only
+  files:
+    train: {id: 1-qX2d-P1Xr64ke6nTdlm33om1VxCUTSh, archive: VisDrone2019-MOT-train.zip}
+    val: {id: 1rqnKe9IgU_crMaxRoel9_nuUsMEBBVQu, archive: VisDrone2019-MOT-val.zip}
+    test_dev: {id: 14z8Acxopj1d86-qhsF1NwS4Bv3KYa4Wu, archive: VisDrone2019-MOT-test-dev.zip}
+
+uavdt:
+  url: https://sites.google.com/view/grli-uavdt/
+  license: research only
+  files:
+    benchmark_m: 1m8KA6oPIRK_Iwt9TYFquC87vBc_8wRVc
+    toolkit: 19498uJd7T9w4quwnQEy62nibt3uyT9pq
+
+dut_anti_uav:
+  url: https://github.com/wangdongdut/DUT-Anti-UAV
+  license: Apache-2.0
+  files:
+    track_images: 1dlSPDggg6TRFMcC1jlYIJxxzUQS1mIh9
+    track_gt: 16PE3tBhT0lUGZLA8-zIRYvNUvxfhFZJq
+    det_train: 1RVsSGPUKTdmoyoPTBTWwroyulLek1eTj
+    det_val: 1333uEQfGuqTKslRkkeLSCxylh6AQ0X6n
+    det_test: 1L1zeW1EMDLlXHClSDcCjl3rs_A6sVai0
+

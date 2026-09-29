@@ -1,0 +1,21 @@
+# YOLO datasets built from the MOT videos: same P-frames in two modalities, so an RGB model
+# and a residual model can be trained on identical frames and compared.
+output_dir: data/yolo
+modalities: [residual, rgb]
+frame_step: 3          # one P-frame out of N
+residual_gain: 4       # pixel = 128 + gain * residual, as in configs/compressed.yaml
+jpeg_quality: 95
+split_seed: 0          # sequence-level split for datasets without an official one
+
+datasets:
+  dut_anti_uav:
+    classes: [drone]
+    source_split: test
+    random_split: {val: 3, test: 5}   # the rest is train
+  uavdt:
+    classes: [car, truck, bus]
+    splits: {train: train, test: test}
+    random_split_from_train: {val: 4}
+  visdrone_mot:
+    classes: [pedestrian, people, bicycle, car, van, truck, tricycle, awning-tricycle, bus, motor]
+    splits: {train: train, val: val, test: test_dev}

@@ -1,0 +1,9 @@
+# Same settings for every modality so RGB and residual models are comparable.
+init: models/yolo11n.pt   # COCO weights for both modalities
+epochs: 30
+imgsz: 640
+batch: 16
+patience: 8
+workers: 8
+cache: ram
+project: runs/train

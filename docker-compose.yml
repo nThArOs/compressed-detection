@@ -19,4 +19,5 @@ services:
       - ./configs:/app/configs
       - ./scripts:/app/scripts
       - ./models:/app/models
+      - ./runs:/app/runs
     shm_size: "2gb"

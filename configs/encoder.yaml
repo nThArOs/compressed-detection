@@ -1,0 +1,13 @@
+# Simulation of what a hardware encoder exports for free, per 16x16 macroblock:
+# motion vector, SAD (luma, source frame vs motion-compensated reference) and intra flag.
+output_dir: data/mb
+mb: 16
+sad_scale: 4          # stored as uint8: round(mean abs error per pixel * sad_scale)
+
+# Level 1 without training: robust threshold on the SAD map
+candidates:
+  k_mad: 6            # threshold = median + k_mad * MAD of the frame (tuned on train videos)
+  min_sad: 16         # and at least this stored value (4 grey levels per pixel)
+  use_intra: false    # x264 codes flat sky as intra: 16% of background vs 4% of drones
+  margin: 1           # macroblocks added around each region
+  max_area: 0.2       # regions larger than this fraction of the frame are dropped (camera motion)

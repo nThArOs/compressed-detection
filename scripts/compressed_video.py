@@ -24,9 +24,10 @@ def reencode(src, dst, cfg):
 
 
 class VideoWriter:
-    def __init__(self, path, fps, w, h):
+    def __init__(self, path, fps, w, h, crf=None):
         self.container = av.open(str(path), "w")
-        self.stream = self.container.add_stream("libx264", rate=fps)
+        self.stream = self.container.add_stream("libx264", rate=fps,
+                                                options={"crf": str(crf)} if crf else None)
         self.stream.width, self.stream.height, self.stream.pix_fmt = w, h, "yuv420p"
 
     def write(self, img):

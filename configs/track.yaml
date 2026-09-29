@@ -24,3 +24,9 @@ datasets:
     model: models/yolo11n.pt  # COCO, no van class
     class_map: {0: pedestrian, 1: bicycle, 2: car, 3: motor, 5: bus, 7: truck}
     eval_classes: [pedestrian, car, van, truck, bus]   # official VisDrone MOT classes
+
+# Labels used in results/report.html
+methods:
+  baseline_rgb: RGB, off-the-shelf detector
+  residual_yolo: Residual, YOLO11n trained on DUT
+  rgb_yolo: RGB, YOLO11n trained on DUT

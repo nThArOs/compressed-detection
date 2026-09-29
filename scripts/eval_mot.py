@@ -63,11 +63,11 @@ def summary(res):
             "GT": int(c["CLR_TP"] + c["CLR_FN"])}
 
 
-def evaluate(method, name, split, cfg, mot, cls):
+def evaluate(method, name, split, cfg, mot, cls, only=None):
     dcfg = cfg["datasets"][name]
     gt_root = ROOT / mot["output_dir"] / name / split
     trk_root = ROOT / cfg["output_dir"] / method / name / split
-    seqs = sorted(p for p in gt_root.iterdir() if p.is_dir())
+    seqs = sorted(p for p in gt_root.iterdir() if p.is_dir() and (only is None or p.name in only))
 
     per_class = {}
     for cname in dcfg["eval_classes"]:
@@ -85,9 +85,11 @@ def evaluate(method, name, split, cfg, mot, cls):
         {c: r[type(m).__name__] for c, r in per_class.items()}) for m in METRICS}
 
     timing = json.loads((trk_root / "timing.json").read_text())
-    frames = sum(s["frames"] for s in timing["sequences"].values())
-    seconds = sum(s["seconds"] for s in timing["sequences"].values())
-    return {"method": method, "dataset": name, "split": split, "sequences": len(seqs),
+    done = [timing["sequences"][s.name] for s in seqs]
+    frames = sum(s["frames"] for s in done)
+    seconds = sum(s["seconds"] for s in done)
+    return {"method": method, "dataset": name, "split": split,
+            "sequences": [s.name for s in seqs],
             "frames": frames, "fps": round(frames / seconds, 1),
             "mean": summary(mean), "classes": {c: summary(r) for c, r in per_class.items()},
             "settings": {k: v for k, v in timing.items() if k != "sequences"},
@@ -98,18 +100,25 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("method", help="folder in results/tracking/")
     parser.add_argument("datasets", nargs="*", help="default: all in configs/track.yaml")
+    parser.add_argument("--sequences", help="splits.json from make_yolo_dataset.py: evaluate "
+                        "its test sequences only, results tagged _heldout")
     args = parser.parse_args()
 
     cfg = load_config(ROOT / "configs" / "track.yaml")
     mot = load_config(ROOT / "configs" / "mot.yaml")
     cls = {name: i for i, name in enumerate(mot["classes"], 1)}
 
+    only, tag = None, ""
+    if args.sequences:
+        test = json.loads((ROOT / args.sequences).read_text())["sequences"]["test"]
+        only, tag = {s.split("/")[1] for s in test}, "_heldout"
+
     for name in args.datasets or list(cfg["datasets"]):
         for split in cfg["datasets"][name]["splits"]:
             if not (ROOT / cfg["output_dir"] / args.method / name / split).exists():
                 continue
-            res = evaluate(args.method, name, split, cfg, mot, cls)
-            save_json(res, ROOT / "results" / f"metrics_{name}_{split}_{args.method}.json")
+            res = evaluate(args.method, name, split, cfg, mot, cls, only)
+            save_json(res, ROOT / "results" / f"metrics_{name}_{split}_{args.method}{tag}.json")
             m = res["mean"]
             print(f"{name}/{split}: HOTA {m['HOTA']}  MOTA {m['MOTA']}  IDF1 {m['IDF1']}  "
                   f"{res['fps']} fps")

@@ -11,7 +11,7 @@ import numpy as np
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
 from ultralytics import YOLO
 
-from common import ROOT, limit_threads, load_config
+from common import ROOT, limit_threads, load_config, tune_onnx
 from compressed_video import motion_field, past_vectors, residual
 
 SECONDS = (0.005, 0.01, 0.025, 0.05, 0.1, 0.2, 0.3, 0.5, 0.75, 1, 1.5, 2.5, 5)
@@ -79,6 +79,9 @@ def process(model, args, source, img, state):
         ERRORS.inc()
         return
     dt = time.perf_counter() - t0
+    if not state["tuned"]:
+        tune_onnx(model, state["threads"])
+        state["tuned"] = True
     LATENCY.observe(dt)
     STAGE.labels("inference").observe(dt)
     FRAMES.inc()
@@ -101,10 +104,10 @@ def process(model, args, source, img, state):
 def run(args):
     threads = limit_threads()
     print(f"torch threads: {threads}", flush=True)
-    model = YOLO(args.model)
+    model = YOLO(args.model, task="detect")
+    state = {"n": 0, "recent": [], "threads": threads, "tuned": False}
     gain = load_config(ROOT / "configs" / "residual.yaml")["residual_gain"]
     sources = [s.strip() for s in args.source.split(",") if s.strip()]
-    state = {"n": 0, "recent": []}
     while True:
         for path in sources:
             for source, img in frames(path, args.input, gain):

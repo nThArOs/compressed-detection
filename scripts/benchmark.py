@@ -8,9 +8,8 @@ from pathlib import Path
 
 import numpy as np
 from ultralytics import YOLO
-from ultralytics.utils.torch_utils import get_flops
 
-from common import ROOT, hardware_info, limit_threads, load_config, save_json
+from common import ROOT, hardware_info, limit_threads, load_config, model_size, save_json, tune_onnx
 from serve import frames
 
 
@@ -34,11 +33,12 @@ def main():
     threads = limit_threads()
     gain = load_config(ROOT / "configs" / "residual.yaml")["residual_gain"]
     t0 = time.perf_counter()
-    model = YOLO(args.model)
+    model = YOLO(args.model, task="detect")
     stream = frames(str(ROOT / args.source), args.input, gain)
     _, first = next(stream)
     model.predict(first, imgsz=args.imgsz, device="cpu", verbose=False)
     cold_start = time.perf_counter() - t0
+    tune_onnx(model, threads)
 
     inference, end_to_end, decode_and_input = [], [], []
     n = 0
@@ -60,8 +60,7 @@ def main():
             break
     total = time.perf_counter() - t_start
 
-    params = sum(p.numel() for p in model.model.parameters())
-    gflops = get_flops(model.model, args.imgsz)
+    params_m, gflops = model_size(model, args.model, args.imgsz)
     out = Path(ROOT / args.out.format(input=args.input))
     save_json({
         "model": args.model,
@@ -78,8 +77,8 @@ def main():
         "fps": round(len(inference) / total, 2),
         "ram_peak_mb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1),
         "model_mb": round(Path(args.model).stat().st_size / 1e6, 2),
-        "params_m": round(params / 1e6, 2),
-        "gflops": round(float(gflops), 2),
+        "params_m": round(params_m, 2),
+        **({"gflops": round(float(gflops), 2)} if gflops is not None else {}),
         "hardware": {**hardware_info(), "cpus_available": threads},
     }, out)
     print(f"{args.input}: p95 {percentiles(inference)['p95']} ms, {len(inference) / total:.2f} fps, "

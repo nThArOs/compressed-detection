@@ -40,7 +40,8 @@ def drop_ignored(trk, ignore, ioa):
     return trk[(inter / (trk[:, None, 4] * trk[:, None, 5])).max(axis=1) <= ioa]
 
 
-def sequence_stats(gt, trk, class_ids, n_frames, fps, ignore_ioa, thresholds):
+def sequence_stats(gt, trk, class_ids, n_frames, fps, ignore_ioa, thresholds, errors=None):
+    """Counts for one sequence; `errors`, when a list, receives every missed object and false alarm."""
     gt_c = gt[np.isin(gt[:, 7], class_ids) & (gt[:, 6] == 1)]
     ignore = gt[gt[:, 6] == 0]
     trk_c = trk[np.isin(trk[:, 7], class_ids)]
@@ -51,6 +52,11 @@ def sequence_stats(gt, trk, class_ids, n_frames, fps, ignore_ioa, thresholds):
         g = gt_c[gt_c[:, 0] == f]
         t = drop_ignored(trk_c[trk_c[:, 0] == f], ignore[ignore[:, 0] == f], ignore_ioa)
         hit_g, hit_t = match(g, t)
+        if errors is not None:
+            errors += [{"kind": "fn", "frame": f, "object": int(r[1]), "box": [round(float(v), 1) for v in r[2:6]]}
+                       for r in g[~hit_g]]
+            errors += [{"kind": "fp", "frame": f, "box": [round(float(v), 1) for v in r[2:6]],
+                        "conf": round(float(r[6]), 3)} for r in t[~hit_t]]
         tp, fp = tp + int(hit_t.sum()), fp + int((~hit_t).sum())
         fa_frames += int((~hit_t).any())
         for tid, hit in zip(t[:, 1].astype(int), hit_t):

@@ -35,8 +35,10 @@ entrypoints:
       python scripts/track.py platform_{input} dut_anti_uav --input {input} --model {model} --classes drone --config {config}
       --sequences data/yolo/dut_anti_uav/splits.json
       && python scripts/eval_mot.py platform_{input} dut_anti_uav --sequences data/yolo/dut_anti_uav/splits.json
+      --input {input} --errors results/errors_platform_{input}
     config: configs/track.yaml
-    outputs: { metrics: "results/metrics_dut_anti_uav_test_platform_{input}_heldout.json" }
+    outputs: { metrics: "results/metrics_dut_anti_uav_test_platform_{input}_heldout.json",
+               errors: "results/errors_platform_{input}/*" }
   benchmark:
     command: python scripts/benchmark.py --model {model} --input {input}
     outputs: { metrics: "results/bench_dut_anti_uav_{input}_platform.json" }

@@ -92,7 +92,7 @@ def operational(stats, thresholds, ecfg, hota_seq_res):
     return out
 
 
-def evaluate(method, name, split, cfg, mot, cls, only=None):
+def evaluate(method, name, split, cfg, mot, cls, only=None, errors=None):
     dcfg = cfg["datasets"][name]
     gt_root = ROOT / mot["output_dir"] / name / split
     trk_root = ROOT / cfg["output_dir"] / method / name / split
@@ -103,9 +103,12 @@ def evaluate(method, name, split, cfg, mot, cls, only=None):
     per_class, last_seq_res, stats = {}, {}, []
     for seq in seqs:
         info = dict(l.split("=", 1) for l in (seq / "seqinfo.ini").read_text().splitlines() if "=" in l)
+        found = [] if errors is not None else None
         stats.append(sequence_stats(load(seq / "gt.txt"), load(trk_root / f"{seq.name}.txt"),
                                     [cls[c] for c in dcfg["eval_classes"]], int(info["seqLength"]),
-                                    float(info.get("frameRate", 30)), ecfg["ignore_ioa"], thresholds))
+                                    float(info.get("frameRate", 30)), ecfg["ignore_ioa"], thresholds, found))
+        if errors is not None:
+            errors[seq] = found
     for cname in dcfg["eval_classes"]:
         seq_res = {}
         for seq in seqs:
@@ -141,6 +144,8 @@ def main():
     parser.add_argument("datasets", nargs="*", help="default: all in configs/track.yaml")
     parser.add_argument("--sequences", help="splits.json from make_yolo_dataset.py: evaluate "
                         "its test sequences only, results tagged _heldout")
+    parser.add_argument("--errors", help="folder for errors.json and thumbnails of a sample of the errors")
+    parser.add_argument("--input", choices=["rgb", "residual"], default="rgb", help="input shown next to the frame")
     args = parser.parse_args()
 
     cfg = load_config(ROOT / "configs" / "track.yaml")
@@ -156,7 +161,11 @@ def main():
         for split in cfg["datasets"][name]["splits"]:
             if not (ROOT / cfg["output_dir"] / args.method / name / split).exists():
                 continue
-            res = evaluate(args.method, name, split, cfg, mot, cls, only)
+            errors = {} if args.errors else None
+            res = evaluate(args.method, name, split, cfg, mot, cls, only, errors)
+            if errors is not None:
+                from error_gallery import write_gallery
+                write_gallery(errors, ROOT / args.errors, args.input)
             save_json(res, ROOT / "results" / f"metrics_{name}_{split}_{args.method}{tag}.json")
             m = res["mean"]
             print(f"{name}/{split}: HOTA {m['HOTA']}  MOTA {m['MOTA']}  IDF1 {m['IDF1']}  "

@@ -74,7 +74,10 @@ def frames(source, mode, gain):
 def process(model, args, source, img, state):
     t0 = time.perf_counter()
     try:
-        boxes = model.predict(img, conf=args.conf, imgsz=args.imgsz, device="cpu", verbose=False)[0].boxes
+        result = model.predict(img, conf=args.conf, imgsz=args.imgsz, device="cpu", verbose=False)[0]
+        boxes = result.boxes
+        if args.classes:
+            boxes = boxes[[result.names[int(c)] in args.classes for c in boxes.cls.tolist()]]
     except Exception:
         ERRORS.inc()
         return
@@ -175,6 +178,7 @@ def main():
     parser.add_argument("--input", choices=["rgb", "residual"], default="residual")
     parser.add_argument("--conf", type=float, default=0.25)
     parser.add_argument("--imgsz", type=int, default=640)
+    parser.add_argument("--classes", nargs="+", help="class names to keep (default: all)")
     parser.add_argument("--no-loop", dest="loop", action="store_false")
     args = parser.parse_args()
 

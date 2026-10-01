@@ -8,6 +8,8 @@ datasets:
     mount: data/mot/dut_anti_uav
   - name: dut_anti_uav_yolo
     mount: data/yolo/dut_anti_uav
+  - name: uavdt_yolo
+    mount: data/yolo/uavdt
 
 models:
   residual:

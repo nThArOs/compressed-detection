@@ -60,7 +60,28 @@ def summary(res):
             "MOTA": round(100 * float(c["MOTA"]), 2),
             "IDF1": round(100 * float(i["IDF1"]), 2),
             "IDSW": int(c["IDSW"]), "FP": int(c["CLR_FP"]), "FN": int(c["CLR_FN"]),
-            "GT": int(c["CLR_TP"] + c["CLR_FN"])}
+            "GT": int(c["CLR_TP"] + c["CLR_FN"]), **detection_scores(c)}
+
+
+def detection_scores(c):
+    tp, fp, fn = float(c["CLR_TP"]), float(c["CLR_FP"]), float(c["CLR_FN"])
+    return {"Precision": round(100 * tp / max(tp + fp, 1), 2), "Recall": round(100 * tp / max(tp + fn, 1), 2),
+            "F1": round(100 * 2 * tp / max(2 * tp + fp + fn, 1), 2)}
+
+
+def confusion(per_class):
+    # matching is done per class, so off-diagonal class pairs are not measured; background is
+    # what nobody annotated (false positives) or what the tracker missed (false negatives)
+    names = list(per_class)
+    n = len(names)
+    matrix = [[0] * (n + 1) for _ in range(n + 1)]
+    for i, name in enumerate(names):
+        c = per_class[name]["CLEAR"]
+        matrix[i][i] = int(c["CLR_TP"])
+        matrix[i][n] = int(c["CLR_FN"])
+        matrix[n][i] = int(c["CLR_FP"])
+    matrix[n][n] = None
+    return {"labels": [*names, "background"], "matrix": matrix, "rows": "ground truth", "columns": "prediction"}
 
 
 def evaluate(method, name, split, cfg, mot, cls, only=None):
@@ -92,6 +113,7 @@ def evaluate(method, name, split, cfg, mot, cls, only=None):
             "sequences": [s.name for s in seqs],
             "frames": frames, "fps": round(frames / seconds, 1),
             "mean": summary(mean), "classes": {c: summary(r) for c, r in per_class.items()},
+            "confusion_matrix": confusion(per_class),
             "settings": {k: v for k, v in timing.items() if k != "sequences"},
             "hardware": hardware_info()}
 

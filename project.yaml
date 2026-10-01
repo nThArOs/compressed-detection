@@ -27,4 +27,4 @@ entrypoints:
 metrics:
   primary: mean.HOTA
   higher_is_better: true
-  watch: [mean.HOTA, mean.MOTA, mean.IDF1, fps]
+  watch: [mean.HOTA, mean.F1, mean.Precision, mean.Recall, mean.IDF1, fps]

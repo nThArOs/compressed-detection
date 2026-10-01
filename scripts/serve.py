@@ -6,6 +6,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import av
+import cv2
 import numpy as np
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
 from ultralytics import YOLO
@@ -24,6 +25,8 @@ PER_FRAME = Histogram("predictions_per_input", "Detections per frame", buckets=(
 FPS = Gauge("frames_per_second", "Processing rate over the last frames")
 
 latest = {"frame": 0, "boxes": [], "fps": 0.0}
+preview = {"frame": 0, "source": None, "input": None, "boxes": [], "cache": {}}
+lock = threading.Lock()
 
 
 def frames(source, mode, gain):
@@ -42,14 +45,14 @@ def frames(source, mode, gain):
         img = frame.to_ndarray(format="bgr24")
         STAGE.labels("decode").observe(time.perf_counter() - t0)
         if mode == "rgb":
-            yield img
+            yield img, img
         else:
             t0 = time.perf_counter()
             mvs = past_vectors(frame) if prev is not None else None
             out = (np.clip(128 + gain * residual(img, prev, motion_field(mvs, h, w), grid), 0, 255).astype(np.uint8)
                    if mvs is not None and len(mvs) else np.full_like(img, 128))
             STAGE.labels("residual").observe(time.perf_counter() - t0)
-            yield out
+            yield img, out
         prev = img
     container.close()
 
@@ -60,7 +63,7 @@ def run(args):
     recent = []
     n = 0
     while True:
-        for img in frames(args.source, args.input, gain):
+        for source, img in frames(args.source, args.input, gain):
             t0 = time.perf_counter()
             try:
                 boxes = model.predict(img, conf=args.conf, imgsz=args.imgsz, device="cpu", verbose=False)[0].boxes
@@ -81,8 +84,33 @@ def run(args):
             FPS.set(fps)
             latest.update(frame=n, fps=round(fps, 2), boxes=[
                 {"xyxy": [round(v, 1) for v in b], "conf": round(c, 3)} for b, c in zip(boxes.xyxy.tolist(), confs)])
+            with lock:
+                preview.update(frame=n, source=source, input=img, boxes=latest["boxes"], cache={})
         if not args.loop:
             break
+
+
+def render(view, width):
+    with lock:
+        key = (view, width)
+        if key in preview["cache"]:
+            return preview["cache"][key]
+        img, boxes = preview[view], preview["boxes"]
+    if img is None:
+        return None
+    t0 = time.perf_counter()
+    out = img.copy()
+    for b in boxes:
+        x1, y1, x2, y2 = map(int, b["xyxy"])
+        cv2.rectangle(out, (x1, y1), (x2, y2), (52, 104, 235), 2)
+        cv2.putText(out, f"{b['conf']:.2f}", (x1, max(y1 - 6, 12)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (52, 104, 235), 1)
+    if width and out.shape[1] > width:
+        out = cv2.resize(out, (width, int(out.shape[0] * width / out.shape[1])), interpolation=cv2.INTER_AREA)
+    data = cv2.imencode(".jpg", out, [cv2.IMWRITE_JPEG_QUALITY, 80])[1].tobytes()
+    STAGE.labels("preview").observe(time.perf_counter() - t0)
+    with lock:
+        preview["cache"][key] = data
+    return data
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -101,6 +129,11 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(200, {"status": "ok"})
         if self.path == "/latest":
             return self.reply(200, latest)
+        if self.path.startswith("/frame.jpg"):
+            query = dict(q.split("=", 1) for q in self.path.partition("?")[2].split("&") if "=" in q)
+            view = "source" if query.get("view") == "source" else "input"
+            data = render(view, int(query.get("width", 960)))
+            return self.reply(200, data, "image/jpeg") if data else self.reply(503, {"detail": "no frame yet"})
         self.reply(404, {"detail": "not found"})
 
     def log_message(self, *_):

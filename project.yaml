@@ -32,7 +32,9 @@ entrypoints:
     command: python scripts/benchmark.py --model {model} --input {input}
     outputs: { metrics: "results/bench_dut_anti_uav_{input}_platform.json" }
   serve:
-    command: python scripts/serve.py --model {model} --port {port} --input {input}
+    command: >-
+      python scripts/serve.py --model {model} --port {port} --input {input}
+      --source data/mot/dut_anti_uav/test/video01/video.mp4,data/mot/dut_anti_uav/test/video12/video.mp4,data/mot/dut_anti_uav/test/video18/video.mp4
     port: 8000
 
 metrics:

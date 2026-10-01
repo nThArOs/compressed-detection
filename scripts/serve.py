@@ -23,6 +23,12 @@ CONFIDENCE = Histogram("prediction_confidence", "Detection confidence",
                        buckets=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1))
 PER_FRAME = Histogram("predictions_per_input", "Detections per frame", buckets=(0, 1, 2, 3, 5, 10, 20))
 FPS = Gauge("frames_per_second", "Processing rate over the last frames")
+# cheap descriptors of the input, compared over time by the platform to detect drift without labels
+MOTION = Histogram("input_motion_magnitude", "Mean motion vector length per frame, pixels",
+                   buckets=(0.05, 0.1, 0.25, 0.5, 1, 2, 4, 8, 16))
+RESIDUAL = Histogram("input_residual_energy", "Mean absolute residual per frame",
+                     buckets=(0.5, 1, 2, 3, 5, 8, 12, 20, 40))
+BRIGHTNESS = Histogram("input_brightness", "Mean luma per frame", buckets=(32, 64, 96, 128, 160, 192, 224))
 
 latest = {"frame": 0, "boxes": [], "fps": 0.0}
 preview = {"frame": 0, "source": None, "input": None, "boxes": [], "cache": {}}
@@ -44,17 +50,52 @@ def frames(source, mode, gain):
             break
         img = frame.to_ndarray(format="bgr24")
         STAGE.labels("decode").observe(time.perf_counter() - t0)
+        BRIGHTNESS.observe(float(img.mean()))
+        mvs = past_vectors(frame) if prev is not None else None
+        if mvs is not None and len(mvs):
+            scale = mvs["motion_scale"].astype(np.float32)
+            MOTION.observe(float(np.hypot(mvs["motion_x"] / scale, mvs["motion_y"] / scale).mean()))
         if mode == "rgb":
             yield img, img
         else:
             t0 = time.perf_counter()
-            mvs = past_vectors(frame) if prev is not None else None
-            out = (np.clip(128 + gain * residual(img, prev, motion_field(mvs, h, w), grid), 0, 255).astype(np.uint8)
-                   if mvs is not None and len(mvs) else np.full_like(img, 128))
+            if mvs is not None and len(mvs):
+                res = residual(img, prev, motion_field(mvs, h, w), grid)
+                RESIDUAL.observe(float(np.abs(res).mean()))
+                out = np.clip(128 + gain * res, 0, 255).astype(np.uint8)
+            else:
+                out = np.full_like(img, 128)
             STAGE.labels("residual").observe(time.perf_counter() - t0)
             yield img, out
         prev = img
     container.close()
+
+
+def process(model, args, source, img, state):
+    t0 = time.perf_counter()
+    try:
+        boxes = model.predict(img, conf=args.conf, imgsz=args.imgsz, device="cpu", verbose=False)[0].boxes
+    except Exception:
+        ERRORS.inc()
+        return
+    dt = time.perf_counter() - t0
+    LATENCY.observe(dt)
+    STAGE.labels("inference").observe(dt)
+    FRAMES.inc()
+    confs = boxes.conf.tolist()
+    for c in confs:
+        CONFIDENCE.observe(c)
+    PER_FRAME.observe(len(confs))
+    state["n"] += 1
+    now = time.time()
+    state["recent"] = [t for t in state["recent"] if t > now - 10] + [now]
+    recent = state["recent"]
+    fps = len(recent) / max(recent[-1] - recent[0], 1e-6) if len(recent) > 1 else 0.0
+    FPS.set(fps)
+    latest.update(frame=state["n"], fps=round(fps, 2), boxes=[
+        {"xyxy": [round(v, 1) for v in b], "conf": round(c, 3)} for b, c in zip(boxes.xyxy.tolist(), confs)])
+    with lock:
+        preview.update(frame=state["n"], source=source, input=img, boxes=latest["boxes"], cache={})
 
 
 def run(args):
@@ -62,32 +103,12 @@ def run(args):
     print(f"torch threads: {threads}", flush=True)
     model = YOLO(args.model)
     gain = load_config(ROOT / "configs" / "residual.yaml")["residual_gain"]
-    recent = []
-    n = 0
+    sources = [s.strip() for s in args.source.split(",") if s.strip()]
+    state = {"n": 0, "recent": []}
     while True:
-        for source, img in frames(args.source, args.input, gain):
-            t0 = time.perf_counter()
-            try:
-                boxes = model.predict(img, conf=args.conf, imgsz=args.imgsz, device="cpu", verbose=False)[0].boxes
-            except Exception:
-                ERRORS.inc()
-                continue
-            dt = time.perf_counter() - t0
-            LATENCY.observe(dt)
-            STAGE.labels("inference").observe(dt)
-            FRAMES.inc()
-            confs = boxes.conf.tolist()
-            for c in confs:
-                CONFIDENCE.observe(c)
-            PER_FRAME.observe(len(confs))
-            n += 1
-            recent = [t for t in recent if t > time.time() - 10] + [time.time()]
-            fps = len(recent) / max(recent[-1] - recent[0], 1e-6) if len(recent) > 1 else 0.0
-            FPS.set(fps)
-            latest.update(frame=n, fps=round(fps, 2), boxes=[
-                {"xyxy": [round(v, 1) for v in b], "conf": round(c, 3)} for b, c in zip(boxes.xyxy.tolist(), confs)])
-            with lock:
-                preview.update(frame=n, source=source, input=img, boxes=latest["boxes"], cache={})
+        for path in sources:
+            for source, img in frames(path, args.input, gain):
+                process(model, args, source, img, state)
         if not args.loop:
             break
 
@@ -146,7 +167,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", required=True)
     parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument("--source", default="data/mot/dut_anti_uav/test/video01/video.mp4")
+    parser.add_argument("--source", default="data/mot/dut_anti_uav/test/video01/video.mp4",
+                        help="video file or RTSP URL, several separated by commas are played in turn")
     parser.add_argument("--input", choices=["rgb", "residual"], default="residual")
     parser.add_argument("--conf", type=float, default=0.25)
     parser.add_argument("--imgsz", type=int, default=640)

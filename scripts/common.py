@@ -35,10 +35,13 @@ def available_cpus():
 
 
 def limit_threads():
+    """Size torch and OpenCV thread pools to the CPU quota, not to the host cores."""
+    import cv2
     import torch
 
     n = available_cpus()
     torch.set_num_threads(n)
+    cv2.setNumThreads(n)
     return n
 
 

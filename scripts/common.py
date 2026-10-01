@@ -24,14 +24,15 @@ def save_json(data, path):
 
 
 def available_cpus():
-    # docker --cpus sets a cgroup quota, os.cpu_count() still reports every core of the host
+    # docker --cpus sets a cgroup quota and --cpuset-cpus an affinity; os.cpu_count() ignores both
+    cpus = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count() or 1
     try:
         quota, period = Path("/sys/fs/cgroup/cpu.max").read_text().split()
         if quota != "max":
-            return max(1, round(int(quota) / int(period)))
+            return max(1, min(cpus, round(int(quota) / int(period))))
     except (OSError, ValueError):
         pass
-    return os.cpu_count() or 1
+    return cpus
 
 
 def limit_threads():

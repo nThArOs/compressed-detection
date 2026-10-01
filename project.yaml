@@ -36,3 +36,8 @@ metrics:
   primary: mean.HOTA
   higher_is_better: true
   watch: [mean.HOTA, mean.F1, mean.Precision, mean.Recall, mean.IDF1, fps]
+
+promotion:
+  min_gain: 0
+  no_regression: { mean.F1: higher, operational.false_alarms_per_hour: lower }
+  tolerance: 0.02

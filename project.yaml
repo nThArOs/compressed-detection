@@ -3,6 +3,10 @@ image: compressed-detection-track:cpu
 task: detection-tracking
 shm_size: 2g
 
+# Files a model depends on besides its weights: residual computation and codec settings. The platform pins
+# them with each trained version and mounts them back for its evaluations, benchmarks and service.
+preprocessing: [configs/residual.yaml, configs/compressed.yaml]
+
 datasets:
   - name: dut_anti_uav_mot
     mount: data/mot/dut_anti_uav

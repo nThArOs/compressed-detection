@@ -1,9 +1,10 @@
 """Train YOLO on one dataset and modality from data/yolo/, copy the best weights to models/."""
 import argparse
+import os
 import shutil
 import time
 
-from ultralytics import YOLO
+from ultralytics import YOLO, settings
 
 from common import ROOT, hardware_info, load_config, save_json
 
@@ -17,6 +18,8 @@ def main():
     args = parser.parse_args()
 
     cfg = load_config(ROOT / args.config)
+    # inside the platform, Ultralytics logs every epoch to the run the platform created
+    settings.update({"mlflow": bool(os.environ.get("MLFLOW_RUN_ID"))})
     data_root = ROOT / load_config(ROOT / "configs" / "residual.yaml")["output_dir"]
 
     for mod in args.modalities:

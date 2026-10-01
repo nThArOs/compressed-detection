@@ -9,6 +9,7 @@ np.float, np.int = float, int
 from trackeval.metrics import CLEAR, HOTA, Identity  # noqa: E402
 
 from common import ROOT, hardware_info, load_config, save_json  # noqa: E402
+from detection_metrics import bootstrap_hota, sequence_stats, summarize  # noqa: E402
 
 METRICS = [HOTA(), CLEAR(), Identity()]
 
@@ -84,13 +85,27 @@ def confusion(per_class):
     return {"labels": [*names, "background"], "matrix": matrix, "rows": "ground truth", "columns": "prediction"}
 
 
+def operational(stats, thresholds, ecfg, hota_seq_res):
+    out = summarize(stats, thresholds, ecfg["size_edges"], ecfg["bootstrap"])
+    if hota_seq_res:
+        out["intervals"]["mean.HOTA"] = bootstrap_hota(hota_seq_res, METRICS[0], ecfg["bootstrap"])
+    return out
+
+
 def evaluate(method, name, split, cfg, mot, cls, only=None):
     dcfg = cfg["datasets"][name]
     gt_root = ROOT / mot["output_dir"] / name / split
     trk_root = ROOT / cfg["output_dir"] / method / name / split
     seqs = sorted(p for p in gt_root.iterdir() if p.is_dir() and (only is None or p.name in only))
 
-    per_class = {}
+    ecfg = cfg["eval"]
+    thresholds = [round(t, 2) for t in np.arange(*ecfg["thresholds"])]
+    per_class, last_seq_res, stats = {}, {}, []
+    for seq in seqs:
+        info = dict(l.split("=", 1) for l in (seq / "seqinfo.ini").read_text().splitlines() if "=" in l)
+        stats.append(sequence_stats(load(seq / "gt.txt"), load(trk_root / f"{seq.name}.txt"),
+                                    [cls[c] for c in dcfg["eval_classes"]], int(info["seqLength"]),
+                                    float(info.get("frameRate", 30)), ecfg["ignore_ioa"], thresholds))
     for cname in dcfg["eval_classes"]:
         seq_res = {}
         for seq in seqs:
@@ -101,6 +116,7 @@ def evaluate(method, name, split, cfg, mot, cls, only=None):
             seq_res[seq.name] = {type(m).__name__: m.eval_sequence(data) for m in METRICS}
         per_class[cname] = {type(m).__name__: m.combine_sequences(
             {s: r[type(m).__name__] for s, r in seq_res.items()}) for m in METRICS}
+        last_seq_res = {s: r["HOTA"] for s, r in seq_res.items()}
 
     mean = {type(m).__name__: m.combine_classes_class_averaged(
         {c: r[type(m).__name__] for c, r in per_class.items()}) for m in METRICS}
@@ -114,6 +130,7 @@ def evaluate(method, name, split, cfg, mot, cls, only=None):
             "frames": frames, "fps": round(frames / seconds, 1),
             "mean": summary(mean), "classes": {c: summary(r) for c, r in per_class.items()},
             "confusion_matrix": confusion(per_class),
+            **operational(stats, thresholds, ecfg, last_seq_res if len(dcfg["eval_classes"]) == 1 else None),
             "settings": {k: v for k, v in timing.items() if k != "sequences"},
             "hardware": hardware_info()}
 

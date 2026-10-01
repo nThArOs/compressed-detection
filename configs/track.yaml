@@ -7,6 +7,9 @@ baseline:
 
 eval:
   ignore_ioa: 0.5           # tracker boxes this much inside an ignore region are dropped
+  size_edges: [40, 80]      # object size buckets, sqrt(w * h) in pixels; DUT drones: median 56 px
+  thresholds: [0.1, 0.95, 0.05]   # confidence thresholds for the precision / recall curve (start, stop, step)
+  bootstrap: 1000           # resamples of the sequences for the 95 % intervals
 
 datasets:
   dut_anti_uav:

@@ -128,14 +128,14 @@ def render(view, width):
     if img is None:
         return None
     t0 = time.perf_counter()
-    out = img.copy()
+    # shrink first, then draw: the preview must stay cheap next to inference
+    scale = width / img.shape[1] if width and img.shape[1] > width else 1.0
+    out = cv2.resize(img, (width, round(img.shape[0] * scale)), interpolation=cv2.INTER_LINEAR) if scale < 1 else img.copy()
     for b in boxes:
-        x1, y1, x2, y2 = map(int, b["xyxy"])
+        x1, y1, x2, y2 = (int(v * scale) for v in b["xyxy"])
         cv2.rectangle(out, (x1, y1), (x2, y2), (52, 104, 235), 2)
         cv2.putText(out, f"{b['conf']:.2f}", (x1, max(y1 - 6, 12)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (52, 104, 235), 1)
-    if width and out.shape[1] > width:
-        out = cv2.resize(out, (width, int(out.shape[0] * width / out.shape[1])), interpolation=cv2.INTER_AREA)
-    data = cv2.imencode(".jpg", out, [cv2.IMWRITE_JPEG_QUALITY, 80])[1].tobytes()
+    data = cv2.imencode(".jpg", out, [cv2.IMWRITE_JPEG_QUALITY, 75])[1].tobytes()
     STAGE.labels("preview").observe(time.perf_counter() - t0)
     with lock:
         preview["cache"][key] = data

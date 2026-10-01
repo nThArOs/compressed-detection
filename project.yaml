@@ -9,19 +9,27 @@ datasets:
   - name: dut_anti_uav_yolo
     mount: data/yolo/dut_anti_uav
 
+models:
+  residual:
+    description: Detector on motion-compensated residuals, decoded from the compressed stream
+    vars: { input: residual }
+  rgb:
+    description: Detector on fully decoded RGB frames, the baseline
+    vars: { input: rgb }
+
 entrypoints:
   train:
-    command: python scripts/train_yolo.py dut_anti_uav residual --config {config} --tag platform
+    command: python scripts/train_yolo.py dut_anti_uav {input} --config {config} --tag platform
     config: configs/train.yaml
-    outputs: { model: models/dut_anti_uav_residual_platform.pt, metrics: results/detect_dut_anti_uav_residual_platform.json }
+    outputs: { model: "models/dut_anti_uav_{input}_platform.pt", metrics: "results/detect_dut_anti_uav_{input}_platform.json" }
   evaluate:
     command: >-
-      python scripts/track.py platform dut_anti_uav --input residual --model {model} --classes drone
+      python scripts/track.py platform_{input} dut_anti_uav --input {input} --model {model} --classes drone
       --sequences data/yolo/dut_anti_uav/splits.json
-      && python scripts/eval_mot.py platform dut_anti_uav --sequences data/yolo/dut_anti_uav/splits.json
-    outputs: { metrics: results/metrics_dut_anti_uav_test_platform_heldout.json }
+      && python scripts/eval_mot.py platform_{input} dut_anti_uav --sequences data/yolo/dut_anti_uav/splits.json
+    outputs: { metrics: "results/metrics_dut_anti_uav_test_platform_{input}_heldout.json" }
   serve:
-    command: python scripts/serve.py --model {model} --port {port} --input residual
+    command: python scripts/serve.py --model {model} --port {port} --input {input}
     port: 8000
 
 metrics:

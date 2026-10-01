@@ -1,0 +1,10 @@
+# Short run with YOLOv8n, to compare architectures through the platform, not for results.
+init: models/yolov8n.pt
+epochs: 1
+fraction: 0.1
+imgsz: 640
+batch: 16
+patience: 8
+workers: 4
+cache: false
+project: runs/train

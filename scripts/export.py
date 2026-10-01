@@ -1,6 +1,7 @@
 """Export a detector to ONNX, optionally quantized to INT8 with calibration frames from the YOLO dataset."""
 import argparse
 import random
+import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -54,10 +55,14 @@ def main():
         random.Random(0).shuffle(images)
         import onnx
 
-        input_name = onnx.load(str(prepared)).graph.input[0].name
-        quantize_static(str(prepared), str(out), Calibration(images[:args.calibration], input_name, args.imgsz),
+        graph = onnx.load(str(prepared)).graph
+        # the detection head turns into zeros when its outputs are quantized: keep it in float
+        layers = [int(m.group(1)) for n in graph.node if (m := re.match(r"/model\.(\d+)/", n.name))]
+        head = f"/model.{max(layers)}/"
+        keep = [n.name for n in graph.node if n.name.startswith(head)]
+        quantize_static(str(prepared), str(out), Calibration(images[:args.calibration], graph.input[0].name, args.imgsz),
                         quant_format=QuantFormat.QDQ, activation_type=QuantType.QUInt8, weight_type=QuantType.QInt8,
-                        calibrate_method=CalibrationMethod.MinMax, per_channel=True)
+                        calibrate_method=CalibrationMethod.MinMax, per_channel=True, nodes_to_exclude=keep)
         original, quantized = onnx.load(str(exported)), onnx.load(str(out))
         quantized.metadata_props.extend(original.metadata_props)
         onnx.save(quantized, str(out))

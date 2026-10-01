@@ -31,6 +31,9 @@ entrypoints:
   benchmark:
     command: python scripts/benchmark.py --model {model} --input {input}
     outputs: { metrics: "results/bench_dut_anti_uav_{input}_platform.json" }
+  export:
+    command: python scripts/export.py --model {model} --input {input} --format {format}
+    outputs: { model: "models/export_dut_anti_uav_{input}.onnx", metrics: "results/export_dut_anti_uav_{input}.json" }
   serve:
     command: >-
       python scripts/serve.py --model {model} --port {port} --input {input}

@@ -4,3 +4,6 @@ lap>=0.5.12
 https://github.com/JonathonLuiten/TrackEval/archive/refs/heads/master.zip
 prometheus-client>=0.20
 mlflow-skinny==3.4.0
+onnx>=1.16
+onnxruntime>=1.18
+onnxslim>=0.1.30

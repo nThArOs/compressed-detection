@@ -1,6 +1,7 @@
 """Extract I-frames, motion vectors and residuals from compressed videos (CoViAR-style)."""
 import argparse
 import csv
+import gc
 import subprocess
 import time
 from pathlib import Path
@@ -41,7 +42,16 @@ class VideoWriter:
         self.container.close()
 
 
+_reads = 0
+
+
 def past_vectors(frame):
+    global _reads
+    # PyAV's motion vector side data sits in reference cycles the collector reaches too late:
+    # without this a stream grows by about 0.1 MB per frame until the container is killed
+    _reads += 1
+    if _reads % 100 == 0:
+        gc.collect()
     sd = frame.side_data.get("MOTION_VECTORS")
     if sd is None:
         return None

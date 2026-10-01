@@ -11,7 +11,7 @@ import numpy as np
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
 from ultralytics import YOLO
 
-from common import ROOT, load_config
+from common import ROOT, limit_threads, load_config
 from compressed_video import motion_field, past_vectors, residual
 
 SECONDS = (0.005, 0.01, 0.025, 0.05, 0.1, 0.2, 0.3, 0.5, 0.75, 1, 1.5, 2.5, 5)
@@ -58,6 +58,8 @@ def frames(source, mode, gain):
 
 
 def run(args):
+    threads = limit_threads()
+    print(f"torch threads: {threads}", flush=True)
     model = YOLO(args.model)
     gain = load_config(ROOT / "configs" / "residual.yaml")["residual_gain"]
     recent = []

@@ -28,6 +28,9 @@ entrypoints:
       --sequences data/yolo/dut_anti_uav/splits.json
       && python scripts/eval_mot.py platform_{input} dut_anti_uav --sequences data/yolo/dut_anti_uav/splits.json
     outputs: { metrics: "results/metrics_dut_anti_uav_test_platform_{input}_heldout.json" }
+  benchmark:
+    command: python scripts/benchmark.py --model {model} --input {input}
+    outputs: { metrics: "results/bench_dut_anti_uav_{input}_platform.json" }
   serve:
     command: python scripts/serve.py --model {model} --port {port} --input {input}
     port: 8000
@@ -41,3 +44,7 @@ promotion:
   min_gain: 0
   no_regression: { mean.F1: higher, operational.false_alarms_per_hour: lower }
   tolerance: 0.02
+
+# Target: an edge box with 2 CPU cores and 2 GB of RAM, at least about 2 frames per second
+constraints:
+  edge-small: { latency_p95_ms: 600, ram_mb: 1500, model_mb: 20 }

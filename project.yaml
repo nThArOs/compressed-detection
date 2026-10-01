@@ -53,3 +53,13 @@ promotion:
 # Target: an edge box with 2 CPU cores and 2 GB of RAM, at least about 2 frames per second
 constraints:
   edge-small: { latency_p95_ms: 600, ram_mb: 1500, model_mb: 20 }
+
+# A new version of the YOLO dataset queues a training of the residual model, evaluated on the held-out
+# videos and benchmarked on edge-small. Promotion stays a human decision.
+retrain:
+  - model: residual
+    datasets: [dut_anti_uav_yolo]
+    config: configs/train.yaml
+    eval_datasets: [dut_anti_uav_mot, dut_anti_uav_yolo]
+    benchmark_profiles: [edge-small]
+    promote: manual

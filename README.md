@@ -44,4 +44,18 @@ VisDrone is on Google Drive and often hits the download quota: download the zips
 
 ## Platform
 
-`project.yaml` declares the entrypoints for [mlops-platform](https://github.com/nThArOs/mlops-platform): training on `dut_anti_uav_yolo`, tracking evaluation on the held-out sequences of `dut_anti_uav_mot`, and `scripts/serve.py`, which runs the detector on a looping video and exposes Prometheus metrics (latency per stage, detections, confidence) on `/metrics`. Runs started by the platform use the `platform` tag and never overwrite `models/dut_anti_uav_residual.pt` or the existing results.
+`project.yaml` plugs the project into [mlops-platform](https://github.com/nThArOs/mlops-platform) with two models, `residual` and `rgb`, sharing the same entrypoints through the `{input}` variable:
+
+| Entrypoint | Script | Output |
+| --- | --- | --- |
+| `train` | `scripts/train_yolo.py --tag platform` | `models/dut_anti_uav_{input}_platform.pt`, epochs logged to the platform run |
+| `evaluate` | `scripts/track.py` then `scripts/eval_mot.py` on the held-out sequences | `results/metrics_dut_anti_uav_test_platform_{input}_heldout.json` |
+| `benchmark` | `scripts/benchmark.py` | latency per stage, fps, peak RAM, size, GFLOPs under the CPU limits of the container |
+| `export` | `scripts/export.py --format onnx\|onnx-int8` | ONNX model; INT8 is calibrated on training frames and keeps the detection head in float |
+| `serve` | `scripts/serve.py` | live detection on a list of videos, Prometheus metrics, `/frame.jpg` preview |
+
+Runs started by the platform never overwrite `models/dut_anti_uav_residual.pt` or the existing results.
+
+`eval_mot.py` adds operational metrics to the TrackEval scores: precision, recall and F1 of the boxes, false alarms per hour (false tracks), share of time with a false alarm on screen, delay to the first detection, recall by drone size (`size_edges` in `configs/track.yaml`), precision and recall against the confidence threshold, and 95 % bootstrap intervals over the sequences.
+
+`serve.py` and `benchmark.py` size the PyTorch thread pool from the container CPU quota, so a 2-CPU profile does not run 16 threads.

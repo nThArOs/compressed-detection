@@ -10,6 +10,8 @@ datasets:
     mount: data/yolo/dut_anti_uav
   - name: uavdt_yolo
     mount: data/yolo/uavdt
+  - name: visdrone_yolo
+    mount: data/yolo/visdrone_mot
 
 models:
   residual:

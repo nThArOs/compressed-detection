@@ -1,9 +1,9 @@
-# Same settings for every modality so RGB and residual models are comparable.
-init: models/yolo11n.pt   # COCO weights for both modalities
-epochs: 30
-imgsz: 640
-batch: 16
-patience: 8
-workers: 8
-cache: ram
-project: runs/train
+# Full training. Same settings for every modality so RGB and residual models are comparable.
+init: models/yolo11n.pt   # starting weights, pretrained on COCO; the file also sets the architecture (yolo11n, yolov8n, ...)
+epochs: 30                # passes over the training frames, about 19 min each on this CPU
+imgsz: 640                # input size in pixels; larger helps small drones but is slower
+batch: 16                 # frames per optimization step; lower it if memory runs out
+patience: 8               # stop early after this many epochs without improvement on validation
+workers: 8                # processes that load and augment frames in parallel
+cache: ram                # keep decoded frames in memory (about 3.5 GB) instead of reading them every epoch
+project: runs/train       # where Ultralytics writes weights, plots and results.csv

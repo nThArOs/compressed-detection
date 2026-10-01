@@ -1,10 +1,10 @@
 # Short run with YOLOv8n, to compare architectures through the platform, not for results.
-init: models/yolov8n.pt
-epochs: 1
-fraction: 0.1
-imgsz: 640
-batch: 16
-patience: 8
-workers: 4
-cache: false
-project: runs/train
+init: models/yolov8n.pt   # YOLOv8n weights pretrained on COCO, to compare architectures
+epochs: 1                 # a single pass
+fraction: 0.1             # use 10 % of the training frames
+imgsz: 640                # input size in pixels
+batch: 16                 # frames per optimization step
+patience: 8               # stop early after this many epochs without improvement on validation
+workers: 4                # processes that load and augment frames in parallel
+cache: false              # read frames from disk, nothing kept in memory
+project: runs/train       # where Ultralytics writes weights, plots and results.csv

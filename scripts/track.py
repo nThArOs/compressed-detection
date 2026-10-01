@@ -78,14 +78,14 @@ def main():
                 for p in sorted((ROOT / mot["output_dir"] / args.dataset / split).iterdir()) if p.is_dir()]
 
     timing = {}
-    for split, seq in todo:
+    for i, (split, seq) in enumerate(todo, 1):
         out = ROOT / cfg["output_dir"] / args.method / args.dataset / split
         out.mkdir(parents=True, exist_ok=True)
         text, n, sec = track_sequence(model, ROOT / mot["output_dir"] / args.dataset / split / seq /
                                       "video.mp4", args.input, cfg["baseline"], class_ids, gain)
         (out / f"{seq}.txt").write_text(text)
         timing.setdefault(split, {})[seq] = {"frames": n, "seconds": round(sec, 2)}
-        print(f"{args.dataset}/{split}/{seq}: {n} frames, {n / sec:.1f} fps")
+        print(f"[{i}/{len(todo)}] {args.dataset}/{split}/{seq}: {n} frames, {n / sec:.1f} fps", flush=True)
 
     for split, seqs in timing.items():
         save_json({"method": args.method, "input": args.input, "model": args.model or dcfg["model"],

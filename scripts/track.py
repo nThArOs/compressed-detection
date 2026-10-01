@@ -58,9 +58,10 @@ def main():
     parser.add_argument("--classes", nargs="+", help="model class names, in model order "
                         "(default: class_map in configs/track.yaml)")
     parser.add_argument("--sequences", help="splits.json from make_yolo_dataset.py: test sequences only")
+    parser.add_argument("--config", default="configs/track.yaml", help="tracker settings")
     args = parser.parse_args()
 
-    cfg = load_config(ROOT / "configs" / "track.yaml")
+    cfg = load_config(ROOT / args.config)
     mot = load_config(ROOT / "configs" / "mot.yaml")
     gain = load_config(ROOT / "configs" / "residual.yaml")["residual_gain"]
     cls = {name: i for i, name in enumerate(mot["classes"], 1)}

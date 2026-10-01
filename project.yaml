@@ -32,9 +32,10 @@ entrypoints:
     outputs: { model: "models/dut_anti_uav_{input}_platform.pt", metrics: "results/detect_dut_anti_uav_{input}_platform.json" }
   evaluate:
     command: >-
-      python scripts/track.py platform_{input} dut_anti_uav --input {input} --model {model} --classes drone
+      python scripts/track.py platform_{input} dut_anti_uav --input {input} --model {model} --classes drone --config {config}
       --sequences data/yolo/dut_anti_uav/splits.json
       && python scripts/eval_mot.py platform_{input} dut_anti_uav --sequences data/yolo/dut_anti_uav/splits.json
+    config: configs/track.yaml
     outputs: { metrics: "results/metrics_dut_anti_uav_test_platform_{input}_heldout.json" }
   benchmark:
     command: python scripts/benchmark.py --model {model} --input {input}

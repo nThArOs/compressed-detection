@@ -41,3 +41,7 @@ docker compose run --rm --entrypoint python extract scripts/convert_mot.py
 ```
 
 VisDrone is on Google Drive and often hits the download quota: download the zips in a browser and put them in `data/visdrone_mot/archives/`.
+
+## Platform
+
+`project.yaml` declares the entrypoints for [mlops-platform](https://github.com/nThArOs/mlops-platform): training on `dut_anti_uav_yolo`, tracking evaluation on the held-out sequences of `dut_anti_uav_mot`, and `scripts/serve.py`, which runs the detector on a looping video and exposes Prometheus metrics (latency per stage, detections, confidence) on `/metrics`. Runs started by the platform use the `platform` tag and never overwrite `models/dut_anti_uav_residual.pt` or the existing results.

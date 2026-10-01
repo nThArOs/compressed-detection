@@ -12,18 +12,20 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("dataset")
     parser.add_argument("modalities", nargs="+", help="residual, rgb")
+    parser.add_argument("--config", default="configs/train.yaml")
+    parser.add_argument("--tag", help="suffix for the run, model and result names")
     args = parser.parse_args()
 
-    cfg = load_config(ROOT / "configs" / "train.yaml")
+    cfg = load_config(ROOT / args.config)
     data_root = ROOT / load_config(ROOT / "configs" / "residual.yaml")["output_dir"]
 
     for mod in args.modalities:
-        name = f"{args.dataset}_{mod}"
+        name = f"{args.dataset}_{mod}" + (f"_{args.tag}" if args.tag else "")
         model = YOLO(str(ROOT / cfg["init"]))
         t0 = time.time()
         model.train(data=str(data_root / args.dataset / mod / "data.yaml"), epochs=cfg["epochs"],
                     imgsz=cfg["imgsz"], batch=cfg["batch"], patience=cfg["patience"],
-                    workers=cfg["workers"], cache=cfg["cache"], device="cpu",
+                    workers=cfg["workers"], cache=cfg["cache"], fraction=cfg.get("fraction", 1.0), device="cpu",
                     project=str(ROOT / cfg["project"]), name=name, exist_ok=True, verbose=False)
         best = ROOT / cfg["project"] / name / "weights" / "best.pt"
         shutil.copy(best, ROOT / "models" / f"{name}.pt")

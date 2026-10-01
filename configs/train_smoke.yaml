@@ -1,0 +1,10 @@
+# Short run to check the pipeline end to end, not for results.
+init: models/yolo11n.pt
+epochs: 1
+fraction: 0.1
+imgsz: 640
+batch: 16
+patience: 8
+workers: 4
+cache: false
+project: runs/train

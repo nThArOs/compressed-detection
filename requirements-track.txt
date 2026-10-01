@@ -2,3 +2,4 @@
 ultralytics>=8.3.0
 lap>=0.5.12
 https://github.com/JonathonLuiten/TrackEval/archive/refs/heads/master.zip
+prometheus-client>=0.20

@@ -1,0 +1,30 @@
+name: compressed-detection
+image: compressed-detection-track:cpu
+task: detection-tracking
+shm_size: 2g
+
+datasets:
+  - name: dut_anti_uav_mot
+    mount: data/mot/dut_anti_uav
+  - name: dut_anti_uav_yolo
+    mount: data/yolo/dut_anti_uav
+
+entrypoints:
+  train:
+    command: python scripts/train_yolo.py dut_anti_uav residual --config {config} --tag platform
+    config: configs/train.yaml
+    outputs: { model: models/dut_anti_uav_residual_platform.pt, metrics: results/detect_dut_anti_uav_residual_platform.json }
+  evaluate:
+    command: >-
+      python scripts/track.py platform dut_anti_uav --input residual --model {model} --classes drone
+      --sequences data/yolo/dut_anti_uav/splits.json
+      && python scripts/eval_mot.py platform dut_anti_uav --sequences data/yolo/dut_anti_uav/splits.json
+    outputs: { metrics: results/metrics_dut_anti_uav_test_platform_heldout.json }
+  serve:
+    command: python scripts/serve.py --model {model} --port {port} --input residual
+    port: 8000
+
+metrics:
+  primary: mean.HOTA
+  higher_is_better: true
+  watch: [mean.HOTA, mean.MOTA, mean.IDF1, fps]

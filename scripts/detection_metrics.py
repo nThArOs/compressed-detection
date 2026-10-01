@@ -92,7 +92,7 @@ def summarize(stats, thresholds, size_edges, n_boot=1000, seed=0):
         count_by_size[name] = int(sel.sum())
         by_size[name] = round(100 * float(found[sel].mean()), 2) if sel.any() else None
     curve = sum(s["curve"] for s in stats)
-    p = curve[:, 0] / np.maximum(curve[:, 0] + curve[:, 1], 1)
+    p = np.where(curve[:, 0] + curve[:, 1] > 0, curve[:, 0] / np.maximum(curve[:, 0] + curve[:, 1], 1), np.nan)
     r = curve[:, 0] / np.maximum(curve[:, 0] + curve[:, 2], 1)
 
     rng = np.random.default_rng(seed)
@@ -116,9 +116,9 @@ def summarize(stats, thresholds, size_edges, n_boot=1000, seed=0):
         },
         "slices": {"recall_by_size": by_size, "objects_by_size": count_by_size, "size_edges_px": list(size_edges)},
         "curves": {"threshold": {"x": [round(float(t), 2) for t in thresholds],
-                                 "precision": [round(100 * float(v), 2) for v in p],
+                                 "precision": [None if np.isnan(v) else round(100 * float(v), 2) for v in p],
                                  "recall": [round(100 * float(v), 2) for v in r],
-                                 "f1": [round(100 * float(v), 2) for v in 2 * p * r / np.maximum(p + r, 1e-9)]}},
+                                 "f1": [round(100 * float(v), 2) for v in np.nan_to_num(2 * p * r / np.maximum(p + r, 1e-9))]}},
         "intervals": {"mean.F1": [round(float(np.percentile(boot, 2.5)), 2), round(float(np.percentile(boot, 97.5)), 2)]},
     }
 

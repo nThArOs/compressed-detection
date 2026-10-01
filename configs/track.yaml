@@ -4,6 +4,7 @@ baseline:
   tracker: bytetrack.yaml   # Ultralytics default: high 0.25, low 0.1, buffer 30
   conf: 0.1                 # must be <= the tracker low threshold
   imgsz: 640
+  reencode: none            # encode each video again before tracking, over compressed.yaml reencode: crf=32,gop=60 or codec=libx265
 
 eval:
   ignore_ioa: 0.5           # tracker boxes this much inside an ignore region are dropped

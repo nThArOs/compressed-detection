@@ -1,6 +1,7 @@
 """Detector + ByteTrack on the RGB frames or on the residual, output in MOTChallenge format."""
 import argparse
 import json
+import tempfile
 import time
 from pathlib import Path
 
@@ -9,7 +10,7 @@ import numpy as np
 from ultralytics import YOLO
 
 from common import ROOT, load_config, save_json
-from compressed_video import motion_field, past_vectors, residual
+from compressed_video import motion_field, past_vectors, reencode, residual
 
 
 def frames(video, mode, gain):
@@ -59,6 +60,7 @@ def main():
                         "(default: class_map in configs/track.yaml)")
     parser.add_argument("--sequences", help="splits.json from make_yolo_dataset.py: test sequences only")
     parser.add_argument("--config", default="configs/track.yaml", help="tracker settings")
+    parser.add_argument("--reencode", help="default: baseline.reencode in the config")
     args = parser.parse_args()
 
     cfg = load_config(ROOT / args.config)
@@ -78,12 +80,21 @@ def main():
         todo = [(split, p.name) for split in dcfg["splits"]
                 for p in sorted((ROOT / mot["output_dir"] / args.dataset / split).iterdir()) if p.is_dir()]
 
+    enc, spec = None, args.reencode or cfg["baseline"].get("reencode", "none")
+    if spec not in ("", "none"):
+        enc = {**load_config(ROOT / "configs" / "compressed.yaml")["reencode"],
+               **dict(kv.split("=", 1) for kv in spec.split(","))}
+    tmp = Path(tempfile.mkdtemp())
+
     timing = {}
     for i, (split, seq) in enumerate(todo, 1):
         out = ROOT / cfg["output_dir"] / args.method / args.dataset / split
         out.mkdir(parents=True, exist_ok=True)
-        text, n, sec = track_sequence(model, ROOT / mot["output_dir"] / args.dataset / split / seq /
-                                      "video.mp4", args.input, cfg["baseline"], class_ids, gain)
+        video = ROOT / mot["output_dir"] / args.dataset / split / seq / "video.mp4"
+        if enc:
+            reencode(video, tmp / f"{seq}.mp4", enc)
+            video = tmp / f"{seq}.mp4"
+        text, n, sec = track_sequence(model, video, args.input, cfg["baseline"], class_ids, gain)
         (out / f"{seq}.txt").write_text(text)
         timing.setdefault(split, {})[seq] = {"frames": n, "seconds": round(sec, 2)}
         print(f"[{i}/{len(todo)}] {args.dataset}/{split}/{seq}: {n} frames, {n / sec:.1f} fps", flush=True)

@@ -19,7 +19,7 @@ VIDEO_EXT = {".mp4", ".mov", ".avi", ".mkv"}
 def reencode(src, dst, cfg):
     gop = str(cfg["gop"])
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(src), "-an",
-                    "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", str(cfg["crf"]),
+                    "-c:v", cfg.get("codec", "libx264"), "-pix_fmt", "yuv420p", "-crf", str(cfg["crf"]),
                     "-g", gop, "-keyint_min", gop, "-sc_threshold", "0",
                     "-bf", str(cfg["bframes"]), "-refs", str(cfg["refs"]), str(dst)], check=True)
 

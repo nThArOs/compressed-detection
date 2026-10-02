@@ -1,0 +1,68 @@
+# Second project on the same code and image: car, truck and bus detection and tracking on UAVDT,
+# RGB against motion-compensated residuals decoded from the compressed stream.
+name: compressed-detection-multiclass
+image: compressed-detection-track:cpu
+task: detection-tracking
+shm_size: 2g
+
+preprocessing: [configs/residual.yaml, configs/compressed.yaml]
+
+datasets:
+  - name: uavdt_mot
+    mount: data/mot/uavdt
+  - name: uavdt_yolo
+    mount: data/yolo/uavdt
+
+models:
+  residual:
+    description: Detector on motion-compensated residuals, decoded from the compressed stream
+    vars: { input: residual }
+  rgb:
+    description: Detector on fully decoded RGB frames, the baseline
+    vars: { input: rgb }
+
+entrypoints:
+  train:
+    command: python scripts/train_yolo.py uavdt {input} --config {config} --tag multiclass
+    config: configs/train_uavdt.yaml
+    outputs: { model: "models/uavdt_{input}_multiclass.pt", metrics: "results/detect_uavdt_{input}_multiclass.json" }
+  evaluate:
+    command: >-
+      python scripts/track.py multiclass_{input} uavdt --input {input} --model {model} --classes car truck bus --config {config}
+      --sequences data/yolo/uavdt/splits.json
+      && python scripts/eval_mot.py multiclass_{input} uavdt --sequences data/yolo/uavdt/splits.json
+      --input {input} --errors results/errors_uavdt_multiclass_{input}
+    config: configs/track.yaml
+    outputs: { metrics: "results/metrics_uavdt_test_multiclass_{input}_heldout.json",
+               errors: "results/errors_uavdt_multiclass_{input}/*" }
+  benchmark:
+    command: >-
+      python scripts/benchmark.py --model {model} --input {input} --source data/mot/uavdt/test/M0203/video.mp4
+      --out results/bench_uavdt_{input}_multiclass.json
+    outputs: { metrics: "results/bench_uavdt_{input}_multiclass.json" }
+  serve:
+    command: >-
+      python scripts/serve.py --model {model} --port {port} --input {input} --classes car truck bus
+      --source data/mot/uavdt/test/M0203/video.mp4,data/mot/uavdt/test/M0601/video.mp4,data/mot/uavdt/test/M1001/video.mp4
+    port: 8000
+
+# Encodings the evaluation is repeated under, as overrides of the evaluate config.
+robustness:
+  lower quality: { baseline.reencode: "crf=32" }
+  very low quality: { baseline.reencode: "crf=38" }
+  long GOP: { baseline.reencode: "gop=60" }
+  B-frames: { baseline.reencode: "bframes=2" }
+  H.265: { baseline.reencode: "codec=libx265" }
+
+metrics:
+  primary: mean.HOTA
+  higher_is_better: true
+  watch: [mean.HOTA, mean.DetA, mean.AssA, mean.IDF1, mean.IDSW, fps]
+
+promotion:
+  min_gain: 0
+  no_regression: { mean.IDF1: higher }
+  tolerance: 0.02
+
+constraints:
+  edge-small: { latency_p95_ms: 600, ram_mb: 1500, model_mb: 20 }

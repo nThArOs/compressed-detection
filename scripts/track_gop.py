@@ -35,9 +35,9 @@ def iou_matrix(a, b):
 
 
 class Tracks:
-    def __init__(self, new_conf, max_missed, min_iou):
+    def __init__(self, new_conf, max_missed, min_iou, confirm=False):
         self.items, self.next_id = [], 1
-        self.new_conf, self.max_missed, self.min_iou = new_conf, max_missed, min_iou
+        self.new_conf, self.max_missed, self.min_iou, self.confirm = new_conf, max_missed, min_iou, confirm
 
     def move(self, flow, w, h):
         """Shift each box by the median motion vector under it; flow points to the reference frame, so the box moves by -flow."""
@@ -51,8 +51,12 @@ class Tracks:
                 t["box"] = [t["box"][0] - dx, t["box"][1] - dy, t["box"][2] - dx, t["box"][3] - dy]
         self.items = [t for t in self.items if t["box"][2] > 0 and t["box"][3] > 0 and t["box"][0] < w and t["box"][1] < h]
 
-    def update(self, boxes, confs, classes, end_tracks):
-        """Match detections to tracks by IoU. end_tracks: an unmatched track counts a miss (a detector that sees everything)."""
+    def update(self, boxes, confs, classes, end_tracks, new_conf=None, tentative=False):
+        """Match detections to tracks by IoU. end_tracks: an unmatched track counts a miss (a detector that sees everything).
+
+        tentative: tracks started here are dropped by the next end_tracks update that does not match them, if confirm is on.
+        """
+        new_conf = self.new_conf if new_conf is None else new_conf
         matched_t, matched_d = set(), set()
         if self.items and len(boxes):
             iou = iou_matrix([t["box"] for t in self.items], boxes)
@@ -61,15 +65,18 @@ class Tracks:
                     self.items[ti].update(box=list(map(float, boxes[di])), conf=float(confs[di]), cls=int(classes[di]), missed=0)
                     matched_t.add(ti)
                     matched_d.add(di)
+                    if end_tracks:
+                        self.items[ti]["tentative"] = False
         if end_tracks:
             for ti, t in enumerate(self.items):
                 if ti not in matched_t:
                     t["missed"] += 1
-            self.items = [t for t in self.items if t["missed"] <= self.max_missed]
+            self.items = [t for t in self.items if t["missed"] <= self.max_missed
+                          and not (self.confirm and t.get("tentative"))]
         for di in range(len(boxes)):
-            if di not in matched_d and confs[di] >= self.new_conf:
+            if di not in matched_d and confs[di] >= new_conf:
                 self.items.append({"id": self.next_id, "box": list(map(float, boxes[di])), "conf": float(confs[di]),
-                                   "cls": int(classes[di]), "missed": 0})
+                                   "cls": int(classes[di]), "missed": 0, "tentative": tentative})
                 self.next_id += 1
 
 
@@ -89,7 +96,7 @@ def track_sequence(video, rgb_model, res_model, tcfg, class_ids, args, res_mode,
     stream.codec_context.options = {"flags2": "+export_mvs"}
     w, h = stream.codec_context.width, stream.codec_context.height
     source = ResidualSource(w, h, res_mode, gain) if res_model else None
-    tracks = Tracks(args.new_conf, args.max_missed, args.min_iou)
+    tracks = Tracks(args.new_conf, args.max_missed, args.min_iou, args.confirm)
     lines, calls, n_p, last_res = [], {"rgb": 0, "residual": 0, "residual_motion": 0}, 0, 0
     t0 = time.time()
     for n, frame in enumerate(container.decode(stream), 1):
@@ -114,7 +121,7 @@ def track_sequence(video, rgb_model, res_model, tcfg, class_ids, args, res_mode,
                         and motion_score(res, args.motion_level) >= args.residual_motion)
                 if periodic or busy:
                     boxes, confs, cls = detect(res_model, res_image, tcfg, class_ids)
-                    tracks.update(boxes, confs, cls, end_tracks=False)
+                    tracks.update(boxes, confs, cls, end_tracks=False, new_conf=args.residual_new_conf or args.new_conf, tentative=True)
                     calls["residual"] += 1
                     calls["residual_motion"] += int(busy and not periodic)
                     last_res = n_p
@@ -142,6 +149,8 @@ def main():
     parser.add_argument("--gop", type=int, help="encode the videos again with this GOP length")
     parser.add_argument("--reencode", help="extra encoder settings as k=v,k=v, like track.py")
     parser.add_argument("--new-conf", type=float, default=0.25, help="minimum confidence to start a track")
+    parser.add_argument("--residual-new-conf", type=float, default=0.0, help="minimum confidence to start a track from the residual detector, default --new-conf")
+    parser.add_argument("--confirm", action="store_true", help="drop a track started by the residual detector if the next I-frame detection does not match it")
     parser.add_argument("--max-missed", type=int, default=2, help="I-frame detections a track may miss before it ends")
     parser.add_argument("--min-iou", type=float, default=0.3)
     args = parser.parse_args()
@@ -188,6 +197,7 @@ def main():
         save_json({"method": args.method, "input": "gop", "rgb_model": args.rgb_model, "residual_model": args.residual_model,
                    "gop": args.gop, "residual_every": args.residual_every if res_model else None,
                    "residual_motion": args.residual_motion if res_model else None,
+                   "confirm": args.confirm, "residual_new_conf": args.residual_new_conf, "new_conf": args.new_conf,
                    **cfg["baseline"], "sequences": seqs},
                   ROOT / cfg["output_dir"] / args.method / args.dataset / split / "timing.json")
 

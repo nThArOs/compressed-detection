@@ -35,7 +35,7 @@ RGB, motion vectors and residual of the same P-frames, with a zoom on the drone.
 
 One GOP: the detector runs on the I-frame, the P-frames only move the boxes with the stream's motion vectors, the residual detector is optional (`scripts/track_gop.py`).
 
-![Detection over a GOP](docs/gop.png)
+![Detection over a GOP](docs/gop.png?v=2)
 
 Confidence on DUT Anti-UAV, held-out sequences, same ByteTrack settings, `conf` 0.1 (`results/metrics_dut_anti_uav_test_platform_*_heldout.json`). At the lowest threshold the recall is the same (73.1 % RGB, 72.6 % residual) but the precision is 42.2 % for the RGB model and 78.2 % for the residual one; the RGB model needs a threshold of about 0.7 to reach the precision the residual model has at 0.1, and loses recall on the way.
 

@@ -25,6 +25,22 @@ Output in `results/compressed/<video>/`:
 
 Parameters are in `configs/compressed.yaml`.
 
+## Figures
+
+Regenerate with `python scripts/make_figures.py` (reads `results/`).
+
+RGB, motion vectors and residual of the same P-frames, with a zoom on the drone. The residual is flat grey where the motion vectors explain the frame, so the drone is nearly all that is left.
+
+![RGB, motion vectors and residual](docs/flows.png)
+
+One GOP: the detector runs on the I-frame, the P-frames only move the boxes with the stream's motion vectors, the residual detector is optional (`scripts/track_gop.py`).
+
+![Detection over a GOP](docs/gop.png)
+
+Confidence on DUT Anti-UAV, held-out sequences, same ByteTrack settings, `conf` 0.1 (`results/metrics_dut_anti_uav_test_platform_*_heldout.json`). At the lowest threshold the recall is the same (73.1 % RGB, 72.6 % residual) but the precision is 42.2 % for the RGB model and 78.2 % for the residual one; the RGB model needs a threshold of about 0.7 to reach the precision the residual model has at 0.1, and loses recall on the way.
+
+![Precision, recall and F1 against confidence](docs/confidence.png)
+
 ## Datasets
 
 One folder per dataset in `data/`, converted to MOTChallenge format in `data/mot/<dataset>/<split>/<sequence>/` (`gt.txt`, `seqinfo.ini`, `video.mp4` encoded with the settings above). Common class list in `configs/mot.yaml`, statistics in `results/datasets.json`.

@@ -55,30 +55,27 @@ def box(ax, x, y, w, h, text, fc, tc="white", fs=10):
 
 
 def gop(length=12, residual_every=4):
-    fig, ax = plt.subplots(figsize=(15, 4.6))
-    ax.set_xlim(-0.3, 2 * length + 0.3)
-    ax.set_ylim(-3.6, 3.4)
+    fig, ax = plt.subplots(figsize=(11, 5.2))
+    ax.set_xlim(-0.3, length + 1.3)
+    ax.set_ylim(-3.9, 3.6)
     ax.axis("off")
-    for k in range(2 * length):
+    for k in range(length + 1):
         is_i = k % length == 0
-        box(ax, k + 0.05, 0, 0.9, 0.9, "I" if is_i else "P", COLORS["i"] if is_i else COLORS["p"], fs=11)
-        ax.text(k + 0.5, -0.35, str(k), ha="center", fontsize=8, color="#52606d")
-    ax.text(0, 1.25, "GOP 1", fontsize=12, weight="bold")
-    ax.text(length, 1.25, "GOP 2", fontsize=12, weight="bold")
-    for g in range(2):
-        s = g * length
-        ax.add_patch(FancyArrowPatch((s + 0.5, 0.95), (s + 0.5, 2.15), arrowstyle="-|>", mutation_scale=14, color=COLORS["rgb"]))
-        box(ax, s - 0.2, 2.2, 4.4, 0.95, "YOLO on the decoded I-frame\n(full image, RGB detector)", COLORS["rgb"])
-        ax.add_patch(FancyArrowPatch((s + 1.0, -0.8), (s + length - 1.0, -0.8), arrowstyle="-|>", mutation_scale=14, color=COLORS["mv"]))
-        ax.text(s + length / 2, -1.5, "P-frames: no detector, each box is moved by the median motion vector under it\n"
-                "(vectors read from the stream, no pixel decoding needed)", ha="center", fontsize=10, color=COLORS["mv"])
-        for k in range(residual_every, length, residual_every):
-            ax.add_patch(FancyArrowPatch((s + k + 0.5, 0.95), (s + k + 0.5, 1.7), arrowstyle="-|>", mutation_scale=10, color=COLORS["residual"]))
-            ax.plot(s + k + 0.5, 1.8, "o", color=COLORS["residual"], ms=6)
-    ax.text(2 * length - 0.2, 3.0, f"residual detector every {residual_every} P-frames (optional)\ncatches objects that appeared after the I-frame",
-            ha="right", fontsize=9.5, color=COLORS["residual"])
-    ax.text(length / 2, -2.9, f"detector calls: 1 per {length} frames instead of {length}", ha="center", fontsize=11, weight="bold")
-    ax.text(length + length / 2, -2.9, "a new I-frame resets the tracks and removes the accumulated drift", ha="center", fontsize=11)
+        box(ax, k + 0.05, 0, 0.9, 0.9, "I" if is_i else "P", COLORS["i"] if is_i else COLORS["p"], fs=13)
+        ax.text(k + 0.5, -0.4, str(k), ha="center", fontsize=10, color="#52606d")
+    ax.text(length + 0.5, 1.15, "next GOP", ha="center", fontsize=10, color="#52606d")
+    ax.text(0, 3.45, "One GOP of %d frames" % length, fontsize=14, weight="bold")
+    ax.add_patch(FancyArrowPatch((0.5, 0.95), (0.5, 2.1), arrowstyle="-|>", mutation_scale=16, color=COLORS["rgb"]))
+    box(ax, 0, 2.15, 5.6, 1.0, "YOLO on the decoded I-frame\n(full image, RGB detector)", COLORS["rgb"], fs=11)
+    for k in range(residual_every, length, residual_every):
+        ax.add_patch(FancyArrowPatch((k + 0.5, 0.95), (k + 0.5, 1.75), arrowstyle="-|>", mutation_scale=12, color=COLORS["residual"]))
+        ax.plot(k + 0.5, 1.9, "o", color=COLORS["residual"], ms=8)
+    ax.text(length + 1.2, 2.6, "optional residual detector\nevery %d P-frames: catches objects\nthat appeared after the I-frame" % residual_every,
+            ha="right", va="center", fontsize=10.5, color=COLORS["residual"])
+    ax.add_patch(FancyArrowPatch((1.0, -0.95), (length - 0.2, -0.95), arrowstyle="-|>", mutation_scale=16, color=COLORS["mv"]))
+    ax.text(length / 2 + 0.4, -1.65, "P-frames: no detector, each box is moved by the median motion vector under it\n(vectors read from the stream)", ha="center", fontsize=11, color=COLORS["mv"])
+    ax.text(length / 2 + 0.4, -2.75, "detector calls: 1 per %d frames instead of %d" % (length, length), ha="center", fontsize=12, weight="bold")
+    ax.text(length / 2 + 0.4, -3.4, "the next I-frame resets the tracks and removes the accumulated drift", ha="center", fontsize=11)
     fig.tight_layout()
     fig.savefig(OUT / "gop.png", dpi=110)
     plt.close(fig)

@@ -70,7 +70,7 @@ def gop(length=12, residual_every=4):
     for k in range(residual_every, length, residual_every):
         ax.add_patch(FancyArrowPatch((k + 0.5, 0.95), (k + 0.5, 1.75), arrowstyle="-|>", mutation_scale=12, color=COLORS["residual"]))
         ax.plot(k + 0.5, 1.9, "o", color=COLORS["residual"], ms=8)
-    ax.text(length + 1.2, 2.6, "optional residual detector\nevery %d P-frames: catches objects\nthat appeared after the I-frame" % residual_every,
+    ax.text(length + 1.2, 2.6, "optional residual detector: every %d P-frames,\nor earlier when the residual shows a lot of motion\n(catches objects that appeared after the I-frame)" % residual_every,
             ha="right", va="center", fontsize=10.5, color=COLORS["residual"])
     ax.add_patch(FancyArrowPatch((1.0, -0.95), (length - 0.2, -0.95), arrowstyle="-|>", mutation_scale=16, color=COLORS["mv"]))
     ax.text(length / 2 + 0.4, -1.65, "P-frames: no detector, each box is moved by the median motion vector under it\n(vectors read from the stream)", ha="center", fontsize=11, color=COLORS["mv"])

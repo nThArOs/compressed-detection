@@ -1,8 +1,9 @@
 """Tracking that calls the detector on I-frames only and follows the boxes on P-frames with the stream's motion vectors.
 
 The GOP length decides how often the detector runs: the stream is encoded again with --gop (or read as is). The
-residual model, if given, runs every --residual-every P-frames to catch moving objects that appeared since the
-last I-frame and to correct drift; it never ends a track, since a static object has no residual.
+residual model, if given, runs every --residual-every P-frames and/or when the residual shows a lot of motion
+(--residual-motion) to catch moving objects that appeared since the last I-frame and to correct drift; it never
+ends a track, since a static object has no residual.
 Output is the same MOTChallenge format as track.py, so eval_mot.py reads it unchanged.
 """
 import argparse
@@ -77,6 +78,11 @@ def detect(model, img, tcfg, class_ids):
     return r.xyxy.numpy(), r.conf.numpy(), r.cls.numpy().astype(int)
 
 
+def motion_score(res, level):
+    """Share of pixels whose residual exceeds `level` grey levels."""
+    return float((np.abs(res) > level).mean())
+
+
 def track_sequence(video, rgb_model, res_model, tcfg, class_ids, args, res_mode, gain):
     container = av.open(str(video))
     stream = container.streams.video[0]
@@ -84,14 +90,14 @@ def track_sequence(video, rgb_model, res_model, tcfg, class_ids, args, res_mode,
     w, h = stream.codec_context.width, stream.codec_context.height
     source = ResidualSource(w, h, res_mode, gain) if res_model else None
     tracks = Tracks(args.new_conf, args.max_missed, args.min_iou)
-    lines, calls, n_p = [], {"rgb": 0, "residual": 0}, 0
+    lines, calls, n_p, last_res = [], {"rgb": 0, "residual": 0, "residual_motion": 0}, 0, 0
     t0 = time.time()
     for n, frame in enumerate(container.decode(stream), 1):
         is_i = PictureType(frame.pict_type).name == "I"
         res_image = None
         if source is not None:
             # in luma mode following the stream is cheap, in rgb mode it converts every frame
-            res_image, _, mvs = source.step(frame, compute=not is_i)
+            res_image, res, mvs = source.step(frame, compute=not is_i)
         else:
             mvs = None if is_i else past_vectors(frame)
         if is_i:
@@ -102,10 +108,16 @@ def track_sequence(video, rgb_model, res_model, tcfg, class_ids, args, res_mode,
             n_p += 1
             if mvs is not None and len(mvs):
                 tracks.move(motion_field_fast(mvs, h, w), w, h)
-            if res_model is not None and res_image is not None and n_p % args.residual_every == 0:
-                boxes, confs, cls = detect(res_model, res_image, tcfg, class_ids)
-                tracks.update(boxes, confs, cls, end_tracks=False)
-                calls["residual"] += 1
+            if res_model is not None and res_image is not None:
+                periodic = args.residual_every > 0 and n_p % args.residual_every == 0
+                busy = (args.residual_motion > 0 and n_p - last_res >= args.residual_min_gap
+                        and motion_score(res, args.motion_level) >= args.residual_motion)
+                if periodic or busy:
+                    boxes, confs, cls = detect(res_model, res_image, tcfg, class_ids)
+                    tracks.update(boxes, confs, cls, end_tracks=False)
+                    calls["residual"] += 1
+                    calls["residual_motion"] += int(busy and not periodic)
+                    last_res = n_p
         for t in tracks.items:
             x1, y1, x2, y2 = t["box"]
             lines.append(f"{n},{t['id']},{x1:.1f},{y1:.1f},{x2 - x1:.1f},{y2 - y1:.1f},{t['conf']:.3f},{class_ids[t['cls']]},-1,-1\n")
@@ -119,7 +131,11 @@ def main():
     parser.add_argument("dataset")
     parser.add_argument("--rgb-model", required=True, help="detector run on I-frames")
     parser.add_argument("--residual-model", help="detector run on some P-frames, on the residual image")
-    parser.add_argument("--residual-every", type=int, default=4, help="run the residual detector every N P-frames")
+    parser.add_argument("--residual-every", type=int, default=4, help="run the residual detector every N P-frames, 0 for never")
+    parser.add_argument("--residual-motion", type=float, default=0.0,
+                        help="also run it when this share of pixels has a residual above --motion-level, 0 for off")
+    parser.add_argument("--motion-level", type=float, default=16, help="residual magnitude, in grey levels, that counts as motion")
+    parser.add_argument("--residual-min-gap", type=int, default=2, help="minimum P-frames between two motion-triggered runs")
     parser.add_argument("--classes", nargs="+", required=True, help="model class names, in model order")
     parser.add_argument("--sequences", help="splits.json from make_yolo_dataset.py: test sequences only")
     parser.add_argument("--config", default="configs/track.yaml", help="detector settings (baseline section)")
@@ -171,6 +187,7 @@ def main():
     for split, seqs in timing.items():
         save_json({"method": args.method, "input": "gop", "rgb_model": args.rgb_model, "residual_model": args.residual_model,
                    "gop": args.gop, "residual_every": args.residual_every if res_model else None,
+                   "residual_motion": args.residual_motion if res_model else None,
                    **cfg["baseline"], "sequences": seqs},
                   ROOT / cfg["output_dir"] / args.method / args.dataset / split / "timing.json")
 

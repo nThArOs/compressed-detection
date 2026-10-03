@@ -25,7 +25,7 @@ entrypoints:
   train:
     command: python scripts/train_yolo.py uavdt {input} --config {config} --tag multiclass
     config: configs/train_uavdt.yaml
-    outputs: { model: "models/uavdt_{input}_multiclass.pt", metrics: "results/detect_uavdt_{input}_multiclass.json" }
+    outputs: { model: "models/uavdt_{input}_multiclass*.pt", metrics: "results/detect_uavdt_{input}_multiclass*.json" }
   evaluate:
     command: >-
       python scripts/track.py multiclass_{input} uavdt --input {input} --model {model} --classes car truck bus --config {config}

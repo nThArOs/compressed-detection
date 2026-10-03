@@ -9,7 +9,7 @@ import numpy as np
 import yaml
 
 from common import ROOT, load_config
-from compressed_video import motion_field, past_vectors, residual
+from compressed_video import ResidualSource
 
 
 def sequence_splits(name, dcfg, mot_root, seed):
@@ -58,22 +58,21 @@ def process_sequence(seq_dir, split, out, cfg, class_idx):
     stream = container.streams.video[0]
     stream.codec_context.options = {"flags2": "+export_mvs"}
     w, h = stream.codec_context.width, stream.codec_context.height
-    grid = np.dstack(np.meshgrid(np.arange(w, dtype=np.float32), np.arange(h, dtype=np.float32)))
+    source = ResidualSource(w, h, cfg.get("residual_mode", "rgb"), cfg["residual_gain"])
 
-    prev, n = None, 0
+    n = 0
     for i, frame in enumerate(container.decode(stream)):
+        # the residual of every frame is needed to follow the stream, only one in frame_step is kept
         img = frame.to_ndarray(format="bgr24")
         f = i + 1
-        mvs = past_vectors(frame) if prev is not None else None
-        if f % cfg["frame_step"] == 0 and mvs is not None and len(mvs):
+        residual_img, _, _ = source.step(frame, img, compute=f % cfg["frame_step"] == 0)
+        if f % cfg["frame_step"] == 0 and residual_img is not None:
             rows = gt[gt[:, 0] == f]
             keep = rows[(rows[:, 6] == 1) & np.isin(rows[:, 7], list(class_idx))]
             boxes = [(*r[2:6], class_idx[int(r[7])]) for r in keep]
             ignore = rows[rows[:, 6] == 0]
 
-            res = residual(img, prev, motion_field(mvs, h, w), grid)
-            images = {"residual": np.clip(128 + cfg["residual_gain"] * res, 0, 255).astype(np.uint8),
-                      "rgb": img.copy()}
+            images = {"residual": residual_img, "rgb": img.copy()}
             stem = f"{seq_dir.name}_{f:06d}"
             for mod in cfg["modalities"]:
                 im = images[mod]
@@ -83,7 +82,6 @@ def process_sequence(seq_dir, split, out, cfg, class_idx):
                 cv2.imwrite(str(d / "images" / split / f"{stem}.jpg"), im, jpg)
                 (d / "labels" / split / f"{stem}.txt").write_text(yolo_labels(boxes, w, h))
             n += 1
-        prev = img
     container.close()
     return n
 

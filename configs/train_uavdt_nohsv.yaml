@@ -1,0 +1,12 @@
+# Residual images are grey plus signed motion error: hue, saturation and brightness jitter changes their meaning,
+# so those augmentations are off. Short run: validation accuracy plateaus after one or two epochs.
+init: models/yolo11n.pt
+name_suffix: _nohsv       # appended to the run, model and result names, so the baseline files are kept
+epochs: 4
+imgsz: 640
+batch: 16
+patience: 5
+workers: 8
+cache: ram
+project: runs/train
+augment: { hsv_h: 0.0, hsv_s: 0.0, hsv_v: 0.0 }   # Ultralytics defaults: 0.015, 0.7, 0.4

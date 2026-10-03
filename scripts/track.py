@@ -10,7 +10,7 @@ import numpy as np
 from ultralytics import YOLO
 
 from common import ROOT, load_config, save_json
-from compressed_video import motion_field, past_vectors, reencode, residual
+from compressed_video import ResidualSource, reencode
 
 
 def frames(video, mode, gain):
@@ -18,18 +18,14 @@ def frames(video, mode, gain):
     stream = container.streams.video[0]
     stream.codec_context.options = {"flags2": "+export_mvs"}
     w, h = stream.codec_context.width, stream.codec_context.height
-    grid = np.dstack(np.meshgrid(np.arange(w, dtype=np.float32), np.arange(h, dtype=np.float32)))
-    prev = None
+    source = ResidualSource(w, h, load_config(ROOT / "configs" / "residual.yaml").get("residual_mode", "rgb"), gain)
     for frame in container.decode(stream):
-        img = frame.to_ndarray(format="bgr24")
         if mode == "rgb":
-            yield img
+            yield frame.to_ndarray(format="bgr24")
         else:
-            mvs = past_vectors(frame) if prev is not None else None
             # I-frames have no residual: an empty frame, the tracker coasts through it
-            yield (np.clip(128 + gain * residual(img, prev, motion_field(mvs, h, w), grid), 0, 255)
-                   .astype(np.uint8) if mvs is not None and len(mvs) else np.full_like(img, 128))
-        prev = img
+            image, _, _ = source.step(frame)
+            yield image if image is not None else np.full((h, w, 3), 128, np.uint8)
     container.close()
 
 

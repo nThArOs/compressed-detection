@@ -3,6 +3,7 @@
 output_dir: data/yolo
 modalities: [residual, rgb]
 frame_step: 3          # one P-frame out of N
+residual_mode: rgb     # rgb: subtract decoded BGR frames; luma: Y plane only, several times cheaper, retrain after changing
 residual_gain: 4       # pixel = 128 + gain * residual, as in configs/compressed.yaml
 jpeg_quality: 95
 split_seed: 0          # sequence-level split for datasets without an official one

@@ -12,7 +12,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, ge
 from ultralytics import YOLO
 
 from common import ROOT, limit_threads, load_config, tune_onnx
-from compressed_video import motion_field, past_vectors, residual
+from compressed_video import ResidualSource, past_vectors
 
 SECONDS = (0.005, 0.01, 0.025, 0.05, 0.1, 0.2, 0.3, 0.5, 0.75, 1, 1.5, 2.5, 5)
 LATENCY = Histogram("inference_latency_seconds", "Model inference time per frame", buckets=SECONDS)
@@ -40,9 +40,9 @@ def frames(source, mode, gain):
     stream = container.streams.video[0]
     stream.codec_context.options = {"flags2": "+export_mvs"}
     w, h = stream.codec_context.width, stream.codec_context.height
-    grid = np.dstack(np.meshgrid(np.arange(w, dtype=np.float32), np.arange(h, dtype=np.float32)))
-    prev = None
+    residuals = ResidualSource(w, h, load_config(ROOT / "configs" / "residual.yaml").get("residual_mode", "rgb"), gain)
     decoded = iter(container.decode(stream))
+    first = True
     while True:
         t0 = time.perf_counter()
         frame = next(decoded, None)
@@ -51,23 +51,23 @@ def frames(source, mode, gain):
         img = frame.to_ndarray(format="bgr24")
         STAGE.labels("decode").observe(time.perf_counter() - t0)
         BRIGHTNESS.observe(float(img.mean()))
-        mvs = past_vectors(frame) if prev is not None else None
+        if mode == "rgb":
+            mvs = None if first else past_vectors(frame)
+            out = res = None
+        else:
+            t0 = time.perf_counter()
+            out, res, mvs = residuals.step(frame, img)
+            STAGE.labels("residual").observe(time.perf_counter() - t0)
+        first = False
         if mvs is not None and len(mvs):
             scale = mvs["motion_scale"].astype(np.float32)
             MOTION.observe(float(np.hypot(mvs["motion_x"] / scale, mvs["motion_y"] / scale).mean()))
+            if res is not None:
+                RESIDUAL.observe(float(np.abs(res).mean()))
         if mode == "rgb":
             yield img, img
         else:
-            t0 = time.perf_counter()
-            if mvs is not None and len(mvs):
-                res = residual(img, prev, motion_field(mvs, h, w), grid)
-                RESIDUAL.observe(float(np.abs(res).mean()))
-                out = np.clip(128 + gain * res, 0, 255).astype(np.uint8)
-            else:
-                out = np.full_like(img, 128)
-            STAGE.labels("residual").observe(time.perf_counter() - t0)
-            yield img, out
-        prev = img
+            yield img, out if out is not None else np.full_like(img, 128)
     container.close()
 
 

@@ -75,10 +75,71 @@ def motion_field(mvs, h, w):
     return flow
 
 
+def luma(frame):
+    """Y plane of a yuv420p frame, without the colour conversion."""
+    plane = frame.planes[0]
+    h, w, stride = frame.height, frame.width, plane.line_size
+    return np.frombuffer(plane, np.uint8).reshape(-1, stride)[:h, :w]
+
+
+def motion_field_fast(mvs, h, w):
+    """Same field as motion_field: blocks are multiples of 4 pixels, so fill a quarter-size grid and enlarge it."""
+    gh, gw = -(-h // 4), -(-w // 4)
+    small = np.zeros((gh, gw, 2), np.float32)
+    scale = mvs["motion_scale"].astype(np.float32)
+    dx, dy = mvs["motion_x"] / scale, mvs["motion_y"] / scale
+    x0 = np.clip((mvs["dst_x"] - mvs["w"] // 2) // 4, 0, gw)
+    y0 = np.clip((mvs["dst_y"] - mvs["h"] // 2) // 4, 0, gh)
+    x1 = np.clip(x0 + mvs["w"] // 4, 0, gw)
+    y1 = np.clip(y0 + mvs["h"] // 4, 0, gh)
+    for a, b, c, d, u, v in zip(x0.tolist(), y0.tolist(), x1.tolist(), y1.tolist(), dx.tolist(), dy.tolist()):
+        small[b:d, a:c] = (u, v)
+    return cv2.resize(small, (gw * 4, gh * 4), interpolation=cv2.INTER_NEAREST)[:h, :w]
+
+
+def residual_luma(cur, ref, flow, grid):
+    pred = cv2.remap(ref, grid[..., 0] + flow[..., 0], grid[..., 1] + flow[..., 1],
+                     cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+    return cur.astype(np.int16) - pred.astype(np.int16)
+
+
 def residual(cur, ref, flow, grid):
     pred = cv2.remap(ref, grid[..., 0] + flow[..., 0], grid[..., 1] + flow[..., 1],
                      cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
     return cur.astype(np.int16) - pred.astype(np.int16)
+
+
+class ResidualSource:
+    """Residual image of each decoded frame against its predecessor, shared by dataset building, tracking and serving.
+
+    mode "rgb" subtracts decoded BGR frames (the original recipe), "luma" works on the Y plane only, which skips
+    the colour conversion and is several times cheaper; the image is then grey in all three channels.
+    """
+
+    def __init__(self, w, h, mode="rgb", gain=4):
+        self.w, self.h, self.mode, self.gain = w, h, mode, gain
+        self.grid = np.dstack(np.meshgrid(np.arange(w, dtype=np.float32), np.arange(h, dtype=np.float32)))
+        self.prev = None
+
+    def step(self, frame, img=None, compute=True):
+        """(image, residual, mvs) of this frame; image and residual are None when it has no residual (I-frame).
+
+        compute=False only follows the stream, for callers that keep a fraction of the frames.
+        """
+        luma_mode = self.mode == "luma"
+        cur = luma(frame).copy() if luma_mode else (img if img is not None else frame.to_ndarray(format="bgr24"))
+        mvs = past_vectors(frame) if compute and self.prev is not None else None
+        image = res = None
+        if mvs is not None and len(mvs):
+            if luma_mode:
+                res = residual_luma(cur, self.prev, motion_field_fast(mvs, self.h, self.w), self.grid)
+                gray = np.clip(128 + self.gain * res, 0, 255).astype(np.uint8)
+                image = cv2.merge([gray, gray, gray])
+            else:
+                res = residual(cur, self.prev, motion_field(mvs, self.h, self.w), self.grid)
+                image = np.clip(128 + self.gain * res, 0, 255).astype(np.uint8)
+        self.prev = cur
+        return image, res, mvs
 
 
 def flow_image(flow, max_mag):

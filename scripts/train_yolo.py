@@ -67,7 +67,7 @@ def main():
     data_root = ROOT / load_config(ROOT / "configs" / "residual.yaml")["output_dir"]
 
     for mod in args.modalities:
-        name = f"{args.dataset}_{mod}" + (f"_{args.tag}" if args.tag else "")
+        name = f"{args.dataset}_{mod}" + (f"_{args.tag}" if args.tag else "") + cfg.get("name_suffix", "")
         sources = mounted_yolo(mod)
         if len(sources) > 1:
             data = merge(sources, Path(tempfile.gettempdir()) / "merged" / name)
@@ -79,7 +79,7 @@ def main():
         t0 = time.time()
         model.train(data=str(data), epochs=cfg["epochs"],
                     imgsz=cfg["imgsz"], batch=cfg["batch"], patience=cfg["patience"],
-                    workers=cfg["workers"], cache=cfg["cache"], fraction=cfg.get("fraction", 1.0), device="cpu",
+                    workers=cfg["workers"], cache=cfg["cache"], fraction=cfg.get("fraction", 1.0), device="cpu", **cfg.get("augment", {}),
                     project=str(ROOT / cfg["project"]), name=name, exist_ok=True, verbose=False)
         best = ROOT / cfg["project"] / name / "weights" / "best.pt"
         shutil.copy(best, ROOT / "models" / f"{name}.pt")
